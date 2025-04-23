@@ -50,12 +50,6 @@ const ServersForm: React.FC<ServersFormProps> = ({ initialValues, onUpdate }) =>
     },
   });
 
-  useEffect(() => {
-    if (savedServers.length > 0) {
-      onUpdate(savedServers);
-    }
-  }, [savedServers, onUpdate]);
-
   const { fields, append, remove } = useFieldArray({
     name: "servers",
     control: form.control,
@@ -71,6 +65,18 @@ const ServersForm: React.FC<ServersFormProps> = ({ initialValues, onUpdate }) =>
     
     onUpdate(cleanServers);
   };
+
+  // Use a ref to track the first render to prevent update loops
+  const isFirstRender = React.useRef(true);
+
+  useEffect(() => {
+    // Only update on the first render if there are saved servers
+    // This prevents update loops between parent and child components
+    if (savedServers.length > 0 && isFirstRender.current) {
+      isFirstRender.current = false;
+      onUpdate(savedServers);
+    }
+  }, [savedServers, onUpdate]);
 
   React.useEffect(() => {
     const debounceTimeout = setTimeout(() => {

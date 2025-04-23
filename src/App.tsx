@@ -13,21 +13,18 @@ import { cn } from './lib/utils'
 import { loadOpenAPISchemaFromLocalStorage } from './components/forms/shared/localstorage'
 
 function App() {
-  // State for the OpenAPI schema
   const [schema, setSchema] = useState<OpenAPISchema>(defaultOpenAPISpec)
   const [showImport, setShowImport] = useState(false)
   const [activeNav, setActiveNav] = useState<string>("info")
 
-  // Load data from localStorage when component mounts
   useEffect(() => {
-    const savedData = loadOpenAPISchemaFromLocalStorage()
-    setSchema(prevSchema => ({
-      ...prevSchema,
-      ...savedData
-    }))
-  }, [])
+      const savedData = loadOpenAPISchemaFromLocalStorage();
+      setSchema(prevSchema => ({
+        ...prevSchema,
+        ...savedData
+      }));
+  }, []); // Removed isLoaded from the dependency array
 
-  // Update specific parts of the schema
   const updateInfo = (info: OpenAPISchema['info']) => {
     setSchema(prev => ({ ...prev, info }))
   }
@@ -49,7 +46,6 @@ function App() {
     setShowImport(false)
   }
 
-  // Navigation items
   const navItems = [
     { id: "info", label: "API Info", icon: <Info className="h-5 w-5 mr-2" /> },
     { id: "servers", label: "Servers", icon: <Server className="h-5 w-5 mr-2" /> },
@@ -58,13 +54,11 @@ function App() {
     { id: "security", label: "Security", icon: <Shield className="h-5 w-5 mr-2" /> },
   ]
 
-  // Get form title based on active navigation
   const getFormTitle = () => {
     const activeItem = navItems.find(item => item.id === activeNav);
     return activeItem ? activeItem.label : "Form";
   }
 
-  // Get form description based on active navigation
   const getFormDescription = () => {
     switch (activeNav) {
       case "info":
@@ -82,7 +76,6 @@ function App() {
     }
   }
 
-  // Get the active form component
   const getActiveForm = () => {
     switch (activeNav) {
       case "info":

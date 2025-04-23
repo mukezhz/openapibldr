@@ -42,7 +42,6 @@ interface InfoFormProps {
 }
 
 const InfoForm: React.FC<InfoFormProps> = ({ initialValues, onUpdate }) => {
-  // Try to load info from localStorage first
   const savedInfo = loadInfoFromLocalStorage();
   
   const form = useForm<z.infer<typeof infoSchema>>({
@@ -64,9 +63,14 @@ const InfoForm: React.FC<InfoFormProps> = ({ initialValues, onUpdate }) => {
     },
   });
 
-  // If we loaded saved info from localStorage, update the parent component
+  // Use a ref to track the first render to prevent update loops
+  const isFirstRender = React.useRef(true);
+
   useEffect(() => {
-    if (savedInfo) {
+    // Only update on the first render if there's saved info
+    // This prevents update loops between parent and child components
+    if (savedInfo && isFirstRender.current) {
+      isFirstRender.current = false;
       onUpdate(savedInfo);
     }
   }, [savedInfo, onUpdate]);

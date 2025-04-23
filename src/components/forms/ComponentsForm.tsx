@@ -180,6 +180,21 @@ const ComponentsForm: React.FC<ComponentsFormProps> = ({ initialValues, onUpdate
     return result.length > 0 ? result : [];
   });
 
+  // Use a ref to track initial render to prevent update loops
+  const isFirstRender = useRef(true);
+
+  useEffect(() => {
+    // Only update on the first render if there are saved components
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      
+      const savedComponentsObj = loadComponentsFromLocalStorage();
+      if (savedComponentsObj.schemas && Object.keys(savedComponentsObj.schemas).length > 0) {
+        onUpdate(savedComponentsObj);
+      }
+    }
+  }, [onUpdate]);
+
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -296,9 +311,9 @@ const ComponentsForm: React.FC<ComponentsFormProps> = ({ initialValues, onUpdate
     setValidationError(null);
     form.reset({
       name: "",
-      type: "schema",
-      componentGroup: "Common",
-      yamlContent: sampleTemplates.schema
+        type: "schema",
+        componentGroup: "Common",
+        yamlContent: sampleTemplates.schema
     });
     setYamlContent(sampleTemplates.schema);
   };

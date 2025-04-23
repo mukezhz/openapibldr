@@ -165,7 +165,7 @@ export const loadOpenAPISchemaFromLocalStorage = (): Partial<OpenAPISchema> => {
   
   return {
     ...(info && { info }),
-    ...(servers && servers.length > 0 && { servers }),
+    servers,
     ...(Object.keys(paths).length > 0 && { paths }),
     ...(Object.keys(components).length > 0 && { components })
   };
