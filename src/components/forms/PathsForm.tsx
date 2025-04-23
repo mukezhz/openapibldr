@@ -26,6 +26,7 @@ import {
 import { Plus, Trash2, ChevronDown, ChevronUp } from "lucide-react";
 import { httpMethods, commonStatusCodes } from "@/lib/utils/defaults";
 import RequestBodyForm from "./RequestBodyForm";
+import ResponseForm from "./ResponseForm";
 import {
   Dialog,
   DialogContent,
@@ -152,6 +153,11 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
   const [selectedOperationForRequestBody, setSelectedOperationForRequestBody] = useState<{ pathIndex: number, operationIndex: number } | null>(null);
   const [requestBodies, setRequestBodies] = useState<Record<string, RequestBodyObject>>({});
   const [isRequestBodyModalOpen, setIsRequestBodyModalOpen] = useState(false);
+
+  // New state for response modal
+  const [selectedOperationForResponse, setSelectedOperationForResponse] = useState<{ pathIndex: number, operationIndex: number } | null>(null);
+  const [isResponseModalOpen, setIsResponseModalOpen] = useState(false);
+  const [responseToEdit, setResponseToEdit] = useState<{ index: number, data: any } | null>(null);
 
   // Initialize form values
   const getInitialFormValues = () => {
@@ -471,6 +477,47 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
     };
   }, []);
 
+  // Handle response updates
+  const handleUpdateResponse = useCallback((response: any) => {
+    if (selectedOperationForResponse) {
+      const { pathIndex, operationIndex } = selectedOperationForResponse;
+      
+      if (responseToEdit) {
+        // Update existing response
+        const responseIndex = responseToEdit.index;
+        form.setValue(`paths.${pathIndex}.operations.${operationIndex}.responses.${responseIndex}`, {
+          statusCode: response.statusCode,
+          description: response.description,
+          schemaRef: response.schemaRef || ""
+        });
+      } else {
+        // Add new response directly to the form values
+        const currentResponses = form.getValues(`paths.${pathIndex}.operations.${operationIndex}.responses`) || [];
+        
+        // Append the new response
+        form.setValue(`paths.${pathIndex}.operations.${operationIndex}.responses`, [
+          ...currentResponses,
+          {
+            statusCode: response.statusCode,
+            description: response.description,
+            schemaRef: response.schemaRef || ""
+          }
+        ]);
+      }
+
+      // Close the response editor modal
+      setIsResponseModalOpen(false);
+      setSelectedOperationForResponse(null);
+      setResponseToEdit(null);
+
+      // Trigger form submission to update the preview immediately
+      setTimeout(() => {
+        const formData = form.getValues();
+        handleSubmit(formData);
+      }, 50);
+    }
+  }, [selectedOperationForResponse, responseToEdit, form, handleSubmit]);
+
   // Submit the form with debounce when it changes
   useEffect(() => {
     // Debounce function to prevent excessive form submissions
@@ -518,6 +565,9 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
                   handleSubmit={handleSubmit}
                   pathFields={pathFields}
                   components={components}
+                  setSelectedOperationForResponse={setSelectedOperationForResponse}
+                  setIsResponseModalOpen={setIsResponseModalOpen}
+                  setResponseToEdit={setResponseToEdit}
                 />
               ))}
 
@@ -574,6 +624,39 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Response Modal */}
+      <Dialog 
+        open={isResponseModalOpen} 
+        onOpenChange={(open) => {
+          setIsResponseModalOpen(open);
+          if (!open) {
+            setSelectedOperationForResponse(null);
+            setResponseToEdit(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          {selectedOperationForResponse && (
+            <>
+              <DialogHeader>
+                <DialogTitle>
+                  {responseToEdit ? 'Edit' : 'Add'} Response for {form.getValues(`paths.${selectedOperationForResponse.pathIndex}.operations.${selectedOperationForResponse.operationIndex}.method`).toUpperCase()} {form.getValues(`paths.${selectedOperationForResponse.pathIndex}.path`)}
+                </DialogTitle>
+                <DialogDescription>
+                  Define the response for this operation
+                </DialogDescription>
+              </DialogHeader>
+              
+              <ResponseForm
+                initialValue={responseToEdit?.data || undefined}
+                onUpdate={handleUpdateResponse}
+                components={components}
+              />
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 };
@@ -592,6 +675,9 @@ type PathItemParams = {
   handleSubmit: (values: PathsFormValues) => void;
   pathFields: FieldArrayWithId<PathsFormValues, "paths", "id">[];
   components?: ComponentsObject; // Add components as a prop
+  setSelectedOperationForResponse: (value: { pathIndex: number; operationIndex: number } | null) => void;
+  setIsResponseModalOpen: (value: boolean) => void;
+  setResponseToEdit: (value: { index: number, data: any } | null) => void;
 }
 // Separate component for each path to isolate hook calls
 const PathItem = ({
@@ -607,7 +693,10 @@ const PathItem = ({
   requestBodies,
   handleSubmit,
   pathFields,
-  components
+  components,
+  setSelectedOperationForResponse,
+  setIsResponseModalOpen,
+  setResponseToEdit
 }: PathItemParams) => {
   // Create a field array for operations within this specific path
   const { fields: operationFields, append: appendOperation, remove: removeOperation } = useFieldArray({
@@ -724,6 +813,9 @@ const PathItem = ({
                 handleSubmit={handleSubmit}
                 operationFields={operationFields}
                 components={components} // Pass components to OperationItem
+                setSelectedOperationForResponse={setSelectedOperationForResponse}
+                setIsResponseModalOpen={setIsResponseModalOpen}
+                setResponseToEdit={setResponseToEdit}
               />
             ))}
 
@@ -777,6 +869,10 @@ type OperationItemParams = {
   handleSubmit: (values: PathsFormValues) => void;
   operationFields: FieldArrayWithId<PathsFormValues, `paths.${number}.operations`, "id">[];
   components?: ComponentsObject; // Add components as a prop
+  // Add new props for response modal
+  setSelectedOperationForResponse: (value: { pathIndex: number; operationIndex: number } | null) => void;
+  setIsResponseModalOpen: (value: boolean) => void;
+  setResponseToEdit: (value: { index: number, data: any } | null) => void;
 }
 // Separate component for each operation to isolate hook calls
 const OperationItem: React.FC<OperationItemParams> = ({
@@ -791,7 +887,10 @@ const OperationItem: React.FC<OperationItemParams> = ({
   requestBodies,
   handleSubmit,
   operationFields,
-  components
+  components,
+  setSelectedOperationForResponse,
+  setIsResponseModalOpen,
+  setResponseToEdit
 }) => {
   const operationKey = `${pathIndex}-${operationIndex}`;
   const isExpanded = expandedOperations[operationKey];
@@ -1004,37 +1103,6 @@ const OperationItem: React.FC<OperationItemParams> = ({
 
           {/* Request Body Section */}
           <div className="mt-4">
-            <div className="flex items-center justify-between mb-2">
-              <h6 className="text-sm font-medium">Request Body</h6>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  // Initialize request body if it doesn't exist
-                  if (!form.getValues(`paths.${pathIndex}.operations.${operationIndex}.requestBody`)) {
-                    form.setValue(`paths.${pathIndex}.operations.${operationIndex}.requestBody`, {
-                      description: "",
-                      required: false,
-                      content: []
-                    });
-                  }
-                  
-                  // Add new content type
-                  appendRequestContent({ contentType: "application/json", schemaRef: "" });
-                  
-                  // Trigger form submission
-                  setTimeout(() => {
-                    const formData = form.getValues();
-                    handleSubmit(formData);
-                  }, 50);
-                }}
-              >
-                <Plus className="h-3 w-3 mr-1" />
-                Add Content Type
-              </Button>
-            </div>
-
             <div className="space-y-2">
               {requestContentFields.map((requestContentField, requestContentIndex) => (
                 <div key={requestContentField.id} className="flex gap-2 p-2 border rounded-md bg-muted/5">
@@ -1154,12 +1222,12 @@ const OperationItem: React.FC<OperationItemParams> = ({
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  appendResponse({ statusCode: "200", description: "Successful operation", schemaRef: "" });
-                  // Trigger form submission
-                  setTimeout(() => {
-                    const formData = form.getValues();
-                    handleSubmit(formData);
-                  }, 50);
+                  setSelectedOperationForResponse({
+                    pathIndex,
+                    operationIndex
+                  });
+                  setIsResponseModalOpen(true);
+                  setResponseToEdit(null);
                 }}
               >
                 <Plus className="h-3 w-3 mr-1" />
@@ -1253,24 +1321,45 @@ const OperationItem: React.FC<OperationItemParams> = ({
                     )}
                   />
 
-                  {responseFields.length > 1 && (
+                  <div className="flex gap-1 mt-6">
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
-                      className="mt-6"
                       onClick={() => {
-                        removeResponse(responseIndex);
-                        // Trigger form submission
-                        setTimeout(() => {
-                          const formData = form.getValues();
-                          handleSubmit(formData);
-                        }, 50);
+                        // Open the response modal for editing
+                        setSelectedOperationForResponse({
+                          pathIndex,
+                          operationIndex
+                        });
+                        setResponseToEdit({
+                          index: responseIndex,
+                          data: form.getValues(`paths.${pathIndex}.operations.${operationIndex}.responses.${responseIndex}`)
+                        });
+                        setIsResponseModalOpen(true);
                       }}
                     >
-                      <Trash2 className="h-3 w-3" />
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-pencil"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
                     </Button>
-                  )}
+
+                    {responseFields.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          removeResponse(responseIndex);
+                          // Trigger form submission
+                          setTimeout(() => {
+                            const formData = form.getValues();
+                            handleSubmit(formData);
+                          }, 50);
+                        }}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
