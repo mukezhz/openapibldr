@@ -37,6 +37,79 @@ export interface OpenApiLocalStorageComponent {
   yamlContent: string
 }
 
+// Request body templates for common patterns
+const requestBodyTemplates = {
+  empty: {
+    description: "",
+    required: false,
+    content: [
+      {
+        contentType: "application/json",
+        useSchemaRef: false,
+        schemaRef: "",
+        schema: {
+          type: "object",
+          description: "",
+          properties: [
+            { name: "id", type: "string", description: "Unique identifier", required: true }
+          ],
+        },
+      },
+    ],
+  },
+  createResource: {
+    description: "Create a new resource",
+    required: true,
+    content: [
+      {
+        contentType: "application/json",
+        useSchemaRef: true,
+        schemaRef: "#/components/schemas/Resource",
+        schema: {
+          type: "object",
+          description: "",
+          properties: [],
+        },
+      },
+    ],
+  },
+  updateResource: {
+    description: "Update an existing resource",
+    required: true,
+    content: [
+      {
+        contentType: "application/json",
+        useSchemaRef: true,
+        schemaRef: "#/components/schemas/Resource",
+        schema: {
+          type: "object",
+          description: "",
+          properties: [],
+        },
+      },
+    ],
+  },
+  multipartFormData: {
+    description: "Upload file with metadata",
+    required: true,
+    content: [
+      {
+        contentType: "multipart/form-data",
+        useSchemaRef: false,
+        schemaRef: "",
+        schema: {
+          type: "object",
+          description: "File upload with metadata",
+          properties: [
+            { name: "file", type: "string", description: "The file to upload", required: true },
+            { name: "description", type: "string", description: "Description of the file", required: false }
+          ],
+        },
+      },
+    ],
+  },
+};
+
 // Function to load components (including schemas) from localStorage
 const loadComponentsFromLocalStorage = (): ComponentsObject => {
   try {
@@ -95,6 +168,7 @@ interface RequestBodyFormProps {
 
 const RequestBodyForm: React.FC<RequestBodyFormProps> = ({ initialValue, onUpdate, components }) => {
   const [expandedContentTypes, setExpandedContentTypes] = useState<Record<number, boolean>>({});
+  const [selectedTemplate, setSelectedTemplate] = useState<string>("empty");
 
   const [localStorageComponents, setLocalStorageComponents] = useState<ComponentsObject | null>(null);
   useEffect(() => {
@@ -103,24 +177,7 @@ const RequestBodyForm: React.FC<RequestBodyFormProps> = ({ initialValue, onUpdat
 
   const getInitialValues = (): RequestBodyFormValues => {
     if (!initialValue) {
-      return {
-        description: "",
-        required: false,
-        content: [
-          {
-            contentType: "application/json",
-            useSchemaRef: false,
-            schemaRef: "",
-            schema: {
-              type: "object",
-              description: "",
-              properties: [
-                { name: "id", type: "string", description: "Unique identifier", required: true }
-              ],
-            },
-          },
-        ],
-      };
+      return requestBodyTemplates.empty;
     }
 
     const contentArray: RequestBodyFormValues['content'] = Object.entries(initialValue.content || {}).map(([contentType, mediaType]) => {
@@ -310,6 +367,38 @@ const RequestBodyForm: React.FC<RequestBodyFormProps> = ({ initialValue, onUpdat
 
             <div className="space-y-4">
               <h3 className="text-lg font-medium">Content Types</h3>
+
+              <FormField
+                control={form.control}
+                name="selectedTemplate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Request Body Template</FormLabel>
+                    <Select
+                      onValueChange={(value) => {
+                        field.onChange(value);
+                        setSelectedTemplate(value);
+                        form.reset(requestBodyTemplates[value]);
+                      }}
+                      value={field.value || "empty"}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a template" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {Object.keys(requestBodyTemplates).map(template => (
+                          <SelectItem key={template} value={template}>
+                            {template}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
               {contentFields.map((field, index) => (
                 <div key={field.id} className="border rounded-md p-4">

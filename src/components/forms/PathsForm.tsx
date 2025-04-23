@@ -74,6 +74,16 @@ const pathSchema = z.object({
           description: z.string().optional(),
           operationId: z.string().optional(),
           tags: z.array(z.string()),
+          requestBody: z.object({
+            description: z.string().optional(),
+            required: z.boolean().optional(),
+            content: z.array(
+              z.object({
+                contentType: z.string(),
+                schemaRef: z.string().optional(),
+              })
+            ).optional(),
+          }).optional(),
           responses: z.array(
             z.object({
               statusCode: z.string().min(1, { message: "Status code is required" }),
@@ -98,7 +108,8 @@ type ResponseItem = OperationItem['responses'][number];
 type NestedFieldArrays = {
   paths: 'paths',
   operations: (pathIndex: number) => `paths.${number}.operations`,
-  responses: (pathIndex: number, operationIndex: number) => `paths.${number}.operations.${number}.responses`
+  responses: (pathIndex: number, operationIndex: number) => `paths.${number}.operations.${number}.responses`,
+  requestContent: (pathIndex: number, operationIndex: number) => `paths.${number}.operations.${number}.requestBody.content`
 };
 
 // Move fieldArrayPaths to module scope so it's accessible to all components
@@ -106,6 +117,7 @@ const fieldArrayPaths: NestedFieldArrays = {
   paths: 'paths',
   operations: (pathIndex) => `paths.${pathIndex}.operations`,
   responses: (pathIndex, operationIndex) => `paths.${pathIndex}.operations.${operationIndex}.responses`,
+  requestContent: (pathIndex, operationIndex) => `paths.${pathIndex}.operations.${operationIndex}.requestBody.content`,
 };
 
 interface PathsFormProps {
@@ -152,7 +164,6 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
     }
 
     const paths: any[] = [];
-    const initialRequestBodies: Record<string, RequestBodyObject> = {};
 
     Object.entries(initialValues).forEach(([pathUrl, pathItem]) => {
       const operations: any[] = [];
@@ -180,11 +191,21 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
             });
           }
 
-          // Store request body separately
+          // Extract request body content as array for the form
+          let requestBody: any = undefined;
           if (operation.requestBody && typeof operation.requestBody !== 'function') {
-            const key = `${pathUrl}-${method}`;
-            if ('content' in operation.requestBody) {
-              initialRequestBodies[key] = operation.requestBody;
+            const reqBody = operation.requestBody;
+            if ('content' in reqBody) {
+              const contentArray = Object.entries(reqBody.content).map(([contentType, mediaType]) => ({
+                contentType,
+                schemaRef: mediaType.schema && '$ref' in mediaType.schema ? mediaType.schema.$ref : '',
+              }));
+              
+              requestBody = {
+                description: reqBody.description || '',
+                required: reqBody.required || false,
+                content: contentArray.length > 0 ? contentArray : [{ contentType: 'application/json', schemaRef: '' }]
+              };
             }
           }
 
@@ -194,6 +215,7 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
             description: operation.description || '',
             operationId: operation.operationId || '',
             tags: operation.tags || [],
+            requestBody,
             responses: responses.length > 0 ? responses : [
               { statusCode: "200", description: "Successful operation", schemaRef: "" }
             ],
@@ -219,9 +241,6 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
         ],
       });
     });
-
-    // Initialize request bodies
-    setTimeout(() => setRequestBodies(initialRequestBodies), 0);
 
     return { paths: paths.length > 0 ? paths : [defaultPath] };
   };
@@ -291,10 +310,31 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
           }
         });
 
-        // Add request body if it exists
-        const requestBodyKey = `${pathValue}-${operation.method}`;
-        if (requestBodies[requestBodyKey]) {
-          operationObject.requestBody = requestBodies[requestBodyKey];
+        // Add request body if it exists in form data
+        if (operation.requestBody && operation.requestBody.content && operation.requestBody.content.length > 0) {
+          const requestBodyObj: RequestBodyObject = {
+            description: operation.requestBody.description,
+            required: operation.requestBody.required,
+            content: {}
+          };
+
+          // Convert content array to content object
+          operation.requestBody.content.forEach(content => {
+            if (content.contentType) {
+              requestBodyObj.content[content.contentType] = {
+                schema: content.schemaRef ? { $ref: content.schemaRef } : {}
+              };
+            }
+          });
+
+          operationObject.requestBody = requestBodyObj;
+        }
+        // Fallback to the old requestBodies state if needed
+        else {
+          const requestBodyKey = `${pathValue}-${operation.method}`;
+          if (requestBodies[requestBodyKey]) {
+            operationObject.requestBody = requestBodies[requestBodyKey];
+          }
         }
 
         // Add operation to path item using the HTTP method as the key
@@ -377,18 +417,20 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
       // Ensure path starts with a forward slash for consistent keys
       path = path.startsWith('/') ? path : `/${path}`;
       const key = `${path}-${method}`;
-
+      console.log("request bodies:", requestBodies)
+      console.log("Updating request body for key:", key, requestBody);
       setRequestBodies(prev => ({
         ...prev,
         [key]: requestBody
       }));
-
+      console.log("set requestBodies:", requestBodies)
       // Close the request body editor modal
       setIsRequestBodyModalOpen(false);
       setSelectedOperationForRequestBody(null);
 
       // Trigger form submission to update the preview
       const formData = form.getValues();
+      console.log("Form data after request body update:", formData);
       handleSubmit(formData);
     }
   }, [selectedOperationForRequestBody, form, handleSubmit]);
@@ -741,6 +783,12 @@ const OperationItem: React.FC<OperationItemParams> = ({
     control: form.control,
   });
 
+  // Create a field array for request body content types
+  const { fields: requestContentFields, append: appendRequestContent, remove: removeRequestContent } = useFieldArray({
+    name: fieldArrayPaths.requestContent(pathIndex, operationIndex) as any,
+    control: form.control,
+  });
+
   // Check if request body exists for this operation
   const path = form.getValues(`paths.${pathIndex}.path`);
   const method = form.getValues(`paths.${pathIndex}.operations.${operationIndex}.method`);
@@ -932,6 +980,149 @@ const OperationItem: React.FC<OperationItemParams> = ({
               </FormItem>
             )}
           />
+
+          {/* Request Body Section */}
+          <div className="mt-4">
+            <div className="flex items-center justify-between mb-2">
+              <h6 className="text-sm font-medium">Request Body</h6>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  // Initialize request body if it doesn't exist
+                  if (!form.getValues(`paths.${pathIndex}.operations.${operationIndex}.requestBody`)) {
+                    form.setValue(`paths.${pathIndex}.operations.${operationIndex}.requestBody`, {
+                      description: "",
+                      required: false,
+                      content: []
+                    });
+                  }
+                  
+                  // Add new content type
+                  appendRequestContent({ contentType: "application/json", schemaRef: "" });
+                  
+                  // Trigger form submission
+                  setTimeout(() => {
+                    const formData = form.getValues();
+                    handleSubmit(formData);
+                  }, 50);
+                }}
+              >
+                <Plus className="h-3 w-3 mr-1" />
+                Add Content Type
+              </Button>
+            </div>
+
+            <div className="space-y-2">
+              {requestContentFields.map((requestContentField, requestContentIndex) => (
+                <div key={requestContentField.id} className="flex gap-2 p-2 border rounded-md bg-muted/5">
+                  <FormField
+                    control={form.control}
+                    name={`paths.${pathIndex}.operations.${operationIndex}.requestBody.content.${requestContentIndex}.contentType`}
+                    render={({ field }) => (
+                      <FormItem className="flex-1">
+                        <FormLabel className="text-xs">Content Type</FormLabel>
+                        <FormControl>
+                          <Input placeholder="application/json" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name={`paths.${pathIndex}.operations.${operationIndex}.requestBody.content.${requestContentIndex}.schemaRef`}
+                    render={({ field }) => (
+                      <FormItem className="flex-1">
+                        <FormLabel className="text-xs">Schema Reference</FormLabel>
+                        <Select
+                          onValueChange={field.onChange} 
+                          value={field.value || ""}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Reference schema" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="">None</SelectItem>
+                            {/* Reference schemas from components */}
+                            {Object.entries(components?.schemas || {}).map(([name]) => (
+                              <SelectItem key={name} value={`#/components/schemas/${name}`}>
+                                {name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="mt-6"
+                    onClick={() => {
+                      removeRequestContent(requestContentIndex);
+                      // Trigger form submission
+                      setTimeout(() => {
+                        const formData = form.getValues();
+                        handleSubmit(formData);
+                      }, 50);
+                    }}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
+              ))}
+              
+              {requestContentFields.length > 0 && (
+                <div className="flex gap-2 p-2 border rounded-md bg-muted/5">
+                  <FormField
+                    control={form.control}
+                    name={`paths.${pathIndex}.operations.${operationIndex}.requestBody.description`}
+                    render={({ field }) => (
+                      <FormItem className="flex-1">
+                        <FormLabel className="text-xs">Description</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Request body description" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name={`paths.${pathIndex}.operations.${operationIndex}.requestBody.required`}
+                    render={({ field }) => (
+                      <FormItem className="flex items-center space-x-2 h-full pt-5">
+                        <FormLabel className="text-xs">Required</FormLabel>
+                        <FormControl>
+                          <input
+                            type="checkbox"
+                            checked={field.value || false}
+                            onChange={(e) => {
+                              field.onChange(e.target.checked);
+                              // Trigger form submission
+                              setTimeout(() => {
+                                const formData = form.getValues();
+                                handleSubmit(formData);
+                              }, 50);
+                            }}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
 
           {/* Responses Section */}
           <div className="mt-4">
