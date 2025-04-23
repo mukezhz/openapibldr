@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useForm, useFieldArray, FormProvider } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -23,6 +23,7 @@ import {
 import { Plus } from "lucide-react";
 import { commonStatusCodes } from "@/lib/utils/defaults";
 import MediaTypeForm from "./shared/MediaTypeForm";
+import { loadComponentsFromLocalStorage } from "./shared/localstorage";
 
 // Define schema types explicitly for templates
 const schemaTypesEnum = z.enum(['string', 'number', 'integer', 'boolean', 'object', 'array', 'null']);
@@ -151,6 +152,10 @@ interface ResponseFormProps {
 }
 
 const ResponseForm: React.FC<ResponseFormProps> = ({ initialValue, onUpdate, components }) => {
+  const [localStorageComponents, setLocalStorageComponents] = useState<ComponentsObject | null>(null);
+  useEffect(() => {
+    setLocalStorageComponents(loadComponentsFromLocalStorage());
+  }, []);
   const [selectedTemplate, setSelectedTemplate] = useState<string>("");
 
   const getInitialValues = (): ResponseFormValues => {
@@ -225,11 +230,11 @@ const ResponseForm: React.FC<ResponseFormProps> = ({ initialValue, onUpdate, com
     if (values.content && values.content.length > 0) {
       // Check for schemaRef on the first item (simplified logic)
       if (values.content[0].useSchemaRef && values.content[0].schemaRef) {
-         // If using schema ref, don't populate content object directly, just the ref
-         // This part might need adjustment based on how schemaRef should override content
-         // For now, let's assume schemaRef takes precedence and content is cleared
-         response.schemaRef = values.content[0].schemaRef;
-         delete response.content; // Remove content if schemaRef is used (adjust if needed)
+        // If using schema ref, don't populate content object directly, just the ref
+        // This part might need adjustment based on how schemaRef should override content
+        // For now, let's assume schemaRef takes precedence and content is cleared
+        response.schemaRef = values.content[0].schemaRef;
+        delete response.content; // Remove content if schemaRef is used (adjust if needed)
       } else {
         // Process content items if not using schemaRef on the first item
         values.content.forEach(item => {
@@ -277,17 +282,17 @@ const ResponseForm: React.FC<ResponseFormProps> = ({ initialValue, onUpdate, com
           }
           // Ensure content is not undefined before assigning
           if (response.content) {
-             response.content[item.contentType] = mediaType;
+            response.content[item.contentType] = mediaType;
           }
         });
-         // If after processing, content is empty, remove it
-         if (response.content && Object.keys(response.content).length === 0) {
-            delete response.content;
-         }
+        // If after processing, content is empty, remove it
+        if (response.content && Object.keys(response.content).length === 0) {
+          delete response.content;
+        }
       }
     } else {
-       // No content array, remove content property
-       delete response.content;
+      // No content array, remove content property
+      delete response.content;
     }
 
     onUpdate(response);
@@ -372,42 +377,44 @@ const ResponseForm: React.FC<ResponseFormProps> = ({ initialValue, onUpdate, com
 
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-medium">Response Content</h3>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      appendContent({
-                        contentType: "application/json",
-                        useSchemaRef: false,
-                        schemaRef: "",
-                        schema: {
-                          type: "object" as SchemaType,
-                          description: "",
-                          properties: [
-                            { name: "success", type: "boolean" as SchemaType, description: "Operation success status", required: true }
-                          ],
-                        },
-                      });
-                    }}
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Content Type
-                  </Button>
+                  <h3 className="text-lg font-medium">Response Content Type</h3>
                 </div>
 
-                {contentFields && contentFields.map((field, index) => (
+                {contentFields.map((field, index) => (
                   <MediaTypeForm
                     key={field.id}
                     control={form.control}
                     index={index}
                     remove={removeContent}
                     components={components}
+                    localStorageComponents={localStorageComponents}
                     fieldId={field.id}
                     totalFields={contentFields.length}
                     formType="response"
                   />
                 ))}
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    appendContent({
+                      contentType: "application/json",
+                      useSchemaRef: false,
+                      schemaRef: "",
+                      schema: {
+                        type: "object" as SchemaType,
+                        description: "",
+                        properties: [
+                          { name: "success", type: "boolean" as SchemaType, description: "Operation success status", required: true }
+                        ],
+                      },
+                    });
+                  }}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Content Type
+                </Button>
               </div>
             </div>
           </form>

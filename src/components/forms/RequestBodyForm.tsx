@@ -17,20 +17,12 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Plus } from "lucide-react";
 import MediaTypeForm from "./shared/MediaTypeForm";
-
-// Add localStorage constants for schemas
-const LOCAL_STORAGE_COMPONENTS_KEY = "openapibldr_components";
-
-export interface OpenApiLocalStorageComponent {
-  name: string
-  type: 'string' | 'number' | 'integer' | 'boolean' | 'object' | 'array' | 'null'
-  componentGroup: string
-  yamlContent: string
-}
+import { loadComponentsFromLocalStorage } from "./shared/localstorage";
 
 // Define schema types explicitly for templates
 const schemaTypesEnum = z.enum(['string', 'number', 'integer', 'boolean', 'object', 'array', 'null']);
 type SchemaType = z.infer<typeof schemaTypesEnum>;
+
 
 // Request body templates for common patterns
 const requestBodyTemplates = {
@@ -103,28 +95,6 @@ const requestBodyTemplates = {
       },
     ],
   },
-};
-
-// Function to load components (including schemas) from localStorage
-const loadComponentsFromLocalStorage = (): ComponentsObject => {
-  try {
-    const savedComponents = localStorage.getItem(LOCAL_STORAGE_COMPONENTS_KEY);
-    if (savedComponents) {
-      const localStorageComponents = JSON.parse(savedComponents) as OpenApiLocalStorageComponent[];
-      const schemas: ComponentsObject["schemas"] = localStorageComponents.reduce((acc, component) => {
-        const { name, type } = component;
-        acc[name] = { type };
-        return acc;
-      }, {} as Record<string, SchemaObject>);
-      const compoents: ComponentsObject = {
-        schemas: schemas
-      } 
-      return compoents
-    }
-  } catch (error) {
-    console.error("Error loading components from localStorage:", error);
-  }
-  return {};
 };
 
 // Schema for request body validation
@@ -327,7 +297,7 @@ const RequestBodyForm: React.FC<RequestBodyFormProps> = ({ initialValue, onUpdat
               />
 
               <div className="space-y-4">
-                <h3 className="text-lg font-medium">Content Types</h3>
+                <h3 className="text-lg font-medium">Request Content Types</h3>
 
                 {contentFields.map((field, index) => (
                   <MediaTypeForm

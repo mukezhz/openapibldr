@@ -164,7 +164,7 @@ const MediaTypeForm: React.FC<MediaTypeFormProps> = ({
                       )}
 
                       {/* Display option group for localStorage schemas (only for request body) */}
-                      {formType === 'request' && localStorageComponents?.schemas && Object.keys(localStorageComponents.schemas).length > 0 && (
+                      {localStorageComponents?.schemas && Object.keys(localStorageComponents.schemas).length > 0 && (
                         <div className="p-2 border-t">
                           <p className="text-sm font-semibold mb-1">Saved Schemas</p>
                           {Object.entries(localStorageComponents.schemas)
