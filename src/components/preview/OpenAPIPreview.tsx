@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { OpenAPISchema } from "@/lib/types";
 import { jsonToYaml, prettyPrintJson, downloadFile } from "@/lib/utils/converters";
 import { validateOpenAPISchema } from "@/lib/utils/validator";
-import { Download, FileJson, FileText, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Download, FileJson, FileText, CheckCircle2, AlertTriangle, Copy, Maximize, Check, Minimize, Minimize2 } from "lucide-react";
 
 interface OpenAPIPreviewProps {
   schema: OpenAPISchema;
@@ -14,14 +14,41 @@ interface OpenAPIPreviewProps {
 const OpenAPIPreview: React.FC<OpenAPIPreviewProps> = ({ schema }) => {
   const [activeTab, setActiveTab] = useState<"yaml" | "json">("yaml");
   const [validationIssues, setValidationIssues] = useState<string[]>([]);
-  
-  // Generate YAML representation
+  const [isCopied, setIsCopied] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const yamlRef = useRef<HTMLPreElement>(null);
+  const jsonRef = useRef<HTMLPreElement>(null);
+
   const yamlContent = jsonToYaml(schema);
-  
-  // Generate JSON representation
+
   const jsonContent = prettyPrintJson(schema);
-  
-  // Download the current format
+
+  const handleCopy = () => {
+    const content = activeTab === "yaml" ? yamlContent : jsonContent;
+    navigator.clipboard.writeText(content).then(() => {
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2000); // Reset copied state after 2 seconds
+    });
+  };
+
+  const handleFullscreen = () => {
+    setIsFullscreen(!isFullscreen);
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && isFullscreen) {
+        setIsFullscreen(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isFullscreen]);
+
   const handleDownload = () => {
     if (activeTab === "yaml") {
       downloadFile(yamlContent, "openapi.yaml", "text/yaml");
@@ -30,14 +57,13 @@ const OpenAPIPreview: React.FC<OpenAPIPreviewProps> = ({ schema }) => {
     }
   };
 
-  // Validate schema whenever it changes
   useEffect(() => {
     const issues = validateOpenAPISchema(schema);
     setValidationIssues(issues);
   }, [schema]);
 
   return (
-    <Card className="w-full">
+    <Card className={`w-full ${isFullscreen ? "fixed inset-0 z-50" : ""}`}>
       <CardHeader className="flex flex-row items-center justify-between">
         <div className="flex items-center">
           <CardTitle className="mr-2">OpenAPI {schema.openapi} Specification</CardTitle>
@@ -47,11 +73,24 @@ const OpenAPIPreview: React.FC<OpenAPIPreviewProps> = ({ schema }) => {
             <AlertTriangle className="h-5 w-5 text-amber-500" />
           )}
         </div>
-        
-        <Button onClick={handleDownload} variant="outline" size="sm" className="ml-auto">
-          <Download className="mr-2 h-4 w-4" />
-          Download
-        </Button>
+
+        <div className="flex items-center ml-auto">
+          <Button onClick={handleDownload} variant="outline" size="sm">
+            <Download className="mr-2 h-4 w-4" />
+            Download
+          </Button>
+          <Button onClick={handleCopy} variant="outline" size="sm" className="ml-2">
+            {isCopied ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
+            {isCopied ? "Copied" : "Copy"}
+          </Button>
+          <Button onClick={handleFullscreen} variant="outline" size="sm" className="ml-2">
+            {isFullscreen ? (
+              <Minimize2 className="h-4 w-4" />
+            ) : (
+              <Maximize className="h-4 w-4" />
+            )}
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         {validationIssues.length > 0 && (
@@ -67,7 +106,7 @@ const OpenAPIPreview: React.FC<OpenAPIPreviewProps> = ({ schema }) => {
             </ul>
           </div>
         )}
-        
+
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "yaml" | "json")}>
           <TabsList className="mb-4">
             <TabsTrigger value="yaml" className="flex items-center">
@@ -79,15 +118,15 @@ const OpenAPIPreview: React.FC<OpenAPIPreviewProps> = ({ schema }) => {
               JSON
             </TabsTrigger>
           </TabsList>
-          
+
           <TabsContent value="yaml">
-            <pre className="p-4 bg-muted rounded-md overflow-auto max-h-[800px] text-sm">
+            <pre className="p-4 bg-muted rounded-md overflow-auto max-h-[800px] text-sm" ref={yamlRef}>
               {yamlContent}
             </pre>
           </TabsContent>
-          
+
           <TabsContent value="json">
-            <pre className="p-4 bg-muted rounded-md overflow-auto max-h-[800px] text-sm">
+            <pre className="p-4 bg-muted rounded-md overflow-auto max-h-[800px] text-sm" ref={jsonRef}>
               {jsonContent}
             </pre>
           </TabsContent>
