@@ -152,14 +152,30 @@ const RequestBodyForm: React.FC<RequestBodyFormProps> = ({ initialValue, onUpdat
     control: form.control,
   });
   
-  // Create property field arrays for all content types at once
-  // This ensures hooks are called in the same order every render
-  const propertyFieldArrays = contentFields.map((_, index) => 
-    useFieldArray({
-      name: `content.${index}.schema.properties`,
-      control: form.control,
-    })
-  );
+  // Create property field arrays for all content types at once to fix the hooks order issue
+  // We'll create arrays for all possible indices up to max content length to ensure stable hooks order
+  const MAX_CONTENT_TYPES = 10; // Set a reasonable maximum
+  const propertyFieldArrays = Array.from({ length: MAX_CONTENT_TYPES }, (_, i) => {
+    // Only create real field arrays for existing content fields
+    if (i < contentFields.length) {
+      return useFieldArray({
+        name: `content.${i}.schema.properties`,
+        control: form.control,
+      });
+    }
+    // Return a dummy field array for slots that don't have content yet
+    return {
+      fields: [],
+      append: () => {},
+      prepend: () => {},
+      remove: () => {},
+      swap: () => {},
+      move: () => {},
+      insert: () => {},
+      update: () => {},
+      replace: () => {}
+    };
+  });
   
   const toggleContentExpansion = (index: number) => {
     setExpandedContentTypes(prev => ({
@@ -227,7 +243,6 @@ const RequestBodyForm: React.FC<RequestBodyFormProps> = ({ initialValue, onUpdat
   return (
     <div className="space-y-4">
       <Form {...form}>
-        {/* Remove the onChange handler from the form element to prevent auto-submission */}
         <form className="space-y-6">
           <div className="space-y-4">
             <FormField
@@ -240,14 +255,6 @@ const RequestBodyForm: React.FC<RequestBodyFormProps> = ({ initialValue, onUpdat
                     <Textarea 
                       placeholder="Description of the request body"
                       {...field} 
-                      onChange={(e) => {
-                        field.onChange(e);
-                        // Manual form submission after a delay to avoid race conditions
-                        setTimeout(() => {
-                          const values = form.getValues();
-                          handleSubmit(values);
-                        }, 100);
-                      }}
                     />
                   </FormControl>
                   <FormMessage />
@@ -265,11 +272,7 @@ const RequestBodyForm: React.FC<RequestBodyFormProps> = ({ initialValue, onUpdat
                       checked={field.value}
                       onCheckedChange={(checked) => {
                         field.onChange(checked);
-                        // Manual form submission after a delay
-                        setTimeout(() => {
-                          const values = form.getValues();
-                          handleSubmit(values);
-                        }, 100);
+                        // Remove the auto-submission to prevent modal closing
                       }}
                     />
                   </FormControl>
@@ -371,11 +374,7 @@ const RequestBodyForm: React.FC<RequestBodyFormProps> = ({ initialValue, onUpdat
                               <Select
                                 onValueChange={(value) => {
                                   field.onChange(value);
-                                  // Manual form submission after change
-                                  setTimeout(() => {
-                                    const values = form.getValues();
-                                    handleSubmit(values);
-                                  }, 100);
+                                  // No auto-submission to prevent modal closing
                                 }}
                                 value={field.value || ""}
                               >
@@ -647,6 +646,13 @@ const RequestBodyForm: React.FC<RequestBodyFormProps> = ({ initialValue, onUpdat
           </div>
         </form>
       </Form>
+      <Button 
+        type="button" 
+        onClick={() => handleSubmit(form.getValues())} 
+        className="w-full"
+      >
+        Save Request Body
+      </Button>
     </div>
   );
 };
