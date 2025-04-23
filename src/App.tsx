@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { defaultOpenAPISpec } from './lib/utils/defaults'
 import { OpenAPISchema } from './lib/types'
 import InfoForm from './components/forms/InfoForm'
@@ -10,12 +10,22 @@ import ImportOpenAPI from './components/import/ImportOpenAPI'
 import { Button } from './components/ui/button'
 import { FileUp, Info, Server, Route, Boxes, Shield, X } from 'lucide-react'
 import { cn } from './lib/utils'
+import { loadOpenAPISchemaFromLocalStorage } from './components/forms/shared/localstorage'
 
 function App() {
   // State for the OpenAPI schema
   const [schema, setSchema] = useState<OpenAPISchema>(defaultOpenAPISpec)
   const [showImport, setShowImport] = useState(false)
   const [activeNav, setActiveNav] = useState<string>("info")
+
+  // Load data from localStorage when component mounts
+  useEffect(() => {
+    const savedData = loadOpenAPISchemaFromLocalStorage()
+    setSchema(prevSchema => ({
+      ...prevSchema,
+      ...savedData
+    }))
+  }, [])
 
   // Update specific parts of the schema
   const updateInfo = (info: OpenAPISchema['info']) => {
