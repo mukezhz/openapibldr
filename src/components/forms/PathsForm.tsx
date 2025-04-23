@@ -417,20 +417,41 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
       // Ensure path starts with a forward slash for consistent keys
       path = path.startsWith('/') ? path : `/${path}`;
       const key = `${path}-${method}`;
-      console.log("request bodies:", requestBodies)
-      console.log("Updating request body for key:", key, requestBody);
+      
+      // Update the request bodies state
       setRequestBodies(prev => ({
         ...prev,
         [key]: requestBody
       }));
-      console.log("set requestBodies:", requestBodies)
+
+      // Also convert and update the form data structure for immediate reflection in the UI
+      if (requestBody && requestBody.content) {
+        // Create content array from the request body content object
+        const contentArray = Object.entries(requestBody.content).map(([contentType, mediaTypeObj]) => {
+          let schemaRef = '';
+          if (mediaTypeObj.schema && '$ref' in mediaTypeObj.schema) {
+            schemaRef = mediaTypeObj.schema.$ref ?? "";
+          }
+          return {
+            contentType,
+            schemaRef
+          };
+        });
+
+        // Update the form with the new request body data
+        form.setValue(`paths.${pathIndex}.operations.${operationIndex}.requestBody`, {
+          description: requestBody.description || '',
+          required: requestBody.required || false,
+          content: contentArray
+        });
+      }
+      
       // Close the request body editor modal
       setIsRequestBodyModalOpen(false);
       setSelectedOperationForRequestBody(null);
 
-      // Trigger form submission to update the preview
+      // Trigger form submission to update the preview immediately
       const formData = form.getValues();
-      console.log("Form data after request body update:", formData);
       handleSubmit(formData);
     }
   }, [selectedOperationForRequestBody, form, handleSubmit]);
