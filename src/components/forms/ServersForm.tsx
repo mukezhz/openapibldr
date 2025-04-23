@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -18,7 +18,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Plus, Trash2 } from "lucide-react";
 
-// Validation schema for server objects
+import { loadServersFromLocalStorage, saveServersToLocalStorage } from "./shared/localstorage";
+
 const serverSchema = z.object({
   servers: z.array(
     z.object({
@@ -36,14 +37,24 @@ interface ServersFormProps {
 }
 
 const ServersForm: React.FC<ServersFormProps> = ({ initialValues, onUpdate }) => {
+  const savedServers = loadServersFromLocalStorage();
+  
   const form = useForm<ServerFormValues>({
     resolver: zodResolver(serverSchema),
     defaultValues: {
-      servers: initialValues.length > 0
-        ? initialValues
-        : [{ url: "https://api.example.com", description: "Production server" }],
+      servers: savedServers.length > 0
+        ? savedServers
+        : initialValues.length > 0
+          ? initialValues
+          : [{ url: "https://api.example.com", description: "Production server" }],
     },
   });
+
+  useEffect(() => {
+    if (savedServers.length > 0) {
+      onUpdate(savedServers);
+    }
+  }, [savedServers, onUpdate]);
 
   const { fields, append, remove } = useFieldArray({
     name: "servers",
@@ -51,30 +62,27 @@ const ServersForm: React.FC<ServersFormProps> = ({ initialValues, onUpdate }) =>
   });
 
   const handleSubmit = (values: ServerFormValues) => {
-    // Clean up empty descriptions
     const cleanServers = values.servers.map(server => ({
       ...server,
       description: server.description || undefined,
     }));
     
+    saveServersToLocalStorage(cleanServers);
+    
     onUpdate(cleanServers);
   };
 
-  // Submit the form whenever it changes
   React.useEffect(() => {
     const debounceTimeout = setTimeout(() => {
       form.handleSubmit(handleSubmit)();
-    }, 300); // Debounce for 300ms to prevent rapid re-renders
+    }, 300); 
 
     return () => clearTimeout(debounceTimeout);
   }, [form.watch()]);
 
-  // Add a new server form at the end and auto-scroll to it
   const addNewServer = () => {
-    // Add a new server to the list
     append({ url: "https://", description: "" });
     
-    // Scroll to the new form with a small delay to allow rendering
     setTimeout(() => {
       const newServerElement = document.getElementById(`server-form-${fields.length}`);
       if (newServerElement) {
@@ -137,7 +145,6 @@ const ServersForm: React.FC<ServersFormProps> = ({ initialValues, onUpdate }) =>
                           {...field} 
                           value={field.value || ""}
                           onChange={(e) => {
-                            // Update the field and trigger form submission for immediate YAML update
                             field.onChange(e);
                           }}
                         />

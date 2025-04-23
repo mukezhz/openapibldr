@@ -15,48 +15,18 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Trash2, ChevronDown, ChevronUp, AlertCircle } from "lucide-react";
+import { Trash2, ChevronDown, ChevronUp, AlertCircle } from "lucide-react";
 import yaml from "js-yaml";
 import Editor, { Monaco, useMonaco } from "@monaco-editor/react";
 import { editor } from "monaco-editor";
 
-// Import our Monaco setup utilities
 import { setupMonacoYaml, configureModelWithSchema } from "@/lib/utils/monaco-setup";
-import openAPISchemas from './openapi-schemas';
 
-// Import Radix UI Select component
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-
-// Local Storage key for component storage
-const LOCAL_STORAGE_COMPONENTS_KEY = "openapibldr_components";
-
-// Function to save components to localStorage
-const saveComponentsToLocalStorage = (components: Component[]) => {
-  try {
-    localStorage.setItem(LOCAL_STORAGE_COMPONENTS_KEY, JSON.stringify(components));
-  } catch (error) {
-    console.error("Error saving components to localStorage:", error);
-  }
-};
-
-// Function to load components from localStorage
-const loadComponentsFromLocalStorage = (): Component[] => {
-  try {
-    const savedComponents = localStorage.getItem(LOCAL_STORAGE_COMPONENTS_KEY);
-    if (savedComponents) {
-      return JSON.parse(savedComponents);
-    }
-  } catch (error) {
-    console.error("Error loading components from localStorage:", error);
-  }
-  return [];
-};
+  OpenApiLocalStorageComponent,
+  saveComponentsToLocalStorage,
+  loadComponentsFromLocalStorage
+} from "./shared/localstorage";
 
 const componentSchema = z.object({
   name: z.string().min(1, { message: "Component name is required" }),
@@ -67,18 +37,6 @@ const componentSchema = z.object({
 
 type Component = z.infer<typeof componentSchema>;
 
-// Sample component group suggestions
-const suggestedGroups = [
-  "User",
-  "Authentication", 
-  "Organization", 
-  "Product", 
-  "Order", 
-  "Common", 
-  "Error"
-];
-
-// Sample templates for different component types
 const sampleTemplates: Record<string, string> = {
   schema: `type: object
 properties:
@@ -96,8 +54,7 @@ properties:
 required:
   - id
   - name`,
-  
-  // Schema example templates
+
   schemaUser: `type: object
 properties:
   id:
@@ -125,7 +82,6 @@ required:
   - name`,
 };
 
-// List of available example templates for schemas
 const schemaExampleTemplates = [
   { value: "schema", label: "Default Schema" },
   { value: "schemaUser", label: "User" },
@@ -142,8 +98,7 @@ const ComponentsForm: React.FC<ComponentsFormProps> = ({ initialValues, onUpdate
   const [yamlPluginReady, setYamlPluginReady] = useState(false);
   const [yamlContent, setYamlContent] = useState<string>(sampleTemplates.schema);
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
-  const [currentSchemaUri, setCurrentSchemaUri] = useState<string | null>(null);
-  
+
   const form = useForm<Component>({
     resolver: zodResolver(componentSchema),
     defaultValues: {
@@ -154,21 +109,20 @@ const ComponentsForm: React.FC<ComponentsFormProps> = ({ initialValues, onUpdate
     }
   });
 
-  // Initialize Monaco YAML plugin with OpenAPI schemas
   useEffect(() => {
     if (monaco) {
-      // Setup Monaco YAML with OpenAPI schemas
       setupMonacoYaml().then(() => {
         setYamlPluginReady(true);
       });
     }
   }, [monaco]);
 
-  // Setup Monaco editor
-  function handleEditorDidMount(editor: editor.IStandaloneCodeEditor, monacoInstance: Monaco) {
+  function handleEditorDidMount(
+    editor: editor.IStandaloneCodeEditor,
+    monacoInstance: Monaco,
+  ) {
     editorRef.current = editor;
-    
-    // Set up editor options
+
     editor.updateOptions({
       minimap: { enabled: false },
       lineNumbers: "on",
@@ -180,30 +134,38 @@ const ComponentsForm: React.FC<ComponentsFormProps> = ({ initialValues, onUpdate
       formatOnType: true,
     });
 
-    // Configure model with the appropriate schema
     if (yamlPluginReady) {
       configureModelWithSchema(editor, monacoInstance, "schema");
     }
   }
 
-  // Update editor model when component type changes
   useEffect(() => {
     if (editorRef.current && monaco && yamlPluginReady) {
       configureModelWithSchema(editorRef.current, monaco, "schema");
     }
   }, [monaco, yamlPluginReady]);
 
-  // Update YAML content
   function handleEditorChange(value: string = "") {
     setYamlContent(value);
     form.setValue("yamlContent", value);
   }
 
   const [components, setComponents] = useState<Component[]>(() => {
-    // Convert initial values to components array
+    const savedComponentsObj = loadComponentsFromLocalStorage();
+
+    if (savedComponentsObj.schemas && Object.keys(savedComponentsObj.schemas).length > 0) {
+      return Object.entries(savedComponentsObj.schemas).map(([name, schema]) => {
+        return {
+          name,
+          type: "schema" as const,
+          componentGroup: "Common",
+          yamlContent: yaml.dump(schema)
+        };
+      });
+    }
+
     const result: Component[] = [];
-    
-    // Extract schemas
+
     if (initialValues.schemas) {
       Object.entries(initialValues.schemas).forEach(([name, schema]) => {
         result.push({
@@ -214,22 +176,15 @@ const ComponentsForm: React.FC<ComponentsFormProps> = ({ initialValues, onUpdate
         });
       });
     }
-    
-    // Load components from localStorage if available
-    const savedComponents = loadComponentsFromLocalStorage();
-    if (savedComponents.length > 0) {
-      return savedComponents;
-    }
-    
+
     return result.length > 0 ? result : [];
   });
-  
+
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [validationError, setValidationError] = useState<string | null>(null);
   const [expandedComponents, setExpandedComponents] = useState<Record<number, boolean>>({});
-  
-  // Toggle component expansion
+
   const toggleComponentExpansion = (index: number) => {
     setExpandedComponents(prev => ({
       ...prev,
@@ -239,64 +194,78 @@ const ComponentsForm: React.FC<ComponentsFormProps> = ({ initialValues, onUpdate
 
   const updateComponents = (newComponents: Component[]) => {
     setComponents(newComponents);
-    
-    // Convert components to OpenAPI components object
+
     const componentsObject: ComponentsObject = {};
-    
-    // Group by type
+
     newComponents.forEach(component => {
       try {
         const parsedContent = yaml.load(component.yamlContent) as SchemaObject;
-        
-        // Only handle schema type components
+
         if (!componentsObject.schemas) componentsObject.schemas = {};
         componentsObject.schemas[component.name] = parsedContent;
       } catch (error) {
         console.error(`Error parsing YAML for ${component.name}:`, error);
       }
     });
-    
-    // Save components to localStorage
-    saveComponentsToLocalStorage(newComponents);
-    
-    // Update parent component
+
+    const componentsToSave: OpenApiLocalStorageComponent[] = newComponents.map(component => {
+      try {
+        const parsedContent = yaml.load(component.yamlContent) as SchemaObject;
+        return {
+          name: component.name,
+          type: parsedContent.type || "object",
+          componentGroup: component.componentGroup,
+          yamlContent: component.yamlContent,
+          properties: parsedContent.properties,
+          required: parsedContent.required,
+          description: parsedContent.description
+        };
+      } catch (error) {
+        console.error(`Error parsing YAML for ${component.name}:`, error);
+        return {
+          name: component.name,
+          type: "object",
+          componentGroup: component.componentGroup,
+          yamlContent: component.yamlContent
+        };
+      }
+    });
+
+    saveComponentsToLocalStorage(componentsToSave);
+
     onUpdate(componentsObject);
   };
-  
+
   const handleSubmit = (values: Component) => {
     try {
-      // Validate YAML
       yaml.load(values.yamlContent);
-      
+
       const newComponents = [...components];
-      
+
       if (editingIndex !== null) {
-        // Update existing component
         newComponents[editingIndex] = values;
       } else {
-        // Add new component
         newComponents.push(values);
       }
-      
+
       updateComponents(newComponents);
       setValidationError(null);
       setEditingIndex(null);
-      
-      // Reset form
+
       form.reset({
         name: "",
         type: "schema",
         componentGroup: "Common",
         yamlContent: sampleTemplates.schema
       });
-      
+
       setYamlContent(sampleTemplates.schema);
-      
+
     } catch (error: any) {
       setValidationError(`YAML validation error: ${error.message}`);
     }
   };
-  
+
   const handleEdit = (index: number) => {
     const component = components[index];
     form.reset(component);
@@ -304,12 +273,12 @@ const ComponentsForm: React.FC<ComponentsFormProps> = ({ initialValues, onUpdate
     setEditingIndex(index);
     setValidationError(null);
   };
-  
+
   const handleDelete = (index: number) => {
     const newComponents = [...components];
     newComponents.splice(index, 1); // Remove component at index
     updateComponents(newComponents);
-    
+
     if (editingIndex === index) {
       setEditingIndex(null);
       form.reset({
@@ -321,7 +290,7 @@ const ComponentsForm: React.FC<ComponentsFormProps> = ({ initialValues, onUpdate
       setYamlContent(sampleTemplates.schema);
     }
   };
-  
+
   const handleCancel = () => {
     setEditingIndex(null);
     setValidationError(null);
@@ -333,26 +302,24 @@ const ComponentsForm: React.FC<ComponentsFormProps> = ({ initialValues, onUpdate
     });
     setYamlContent(sampleTemplates.schema);
   };
-  
+
   const handleExampleTemplateChange = (template: string) => {
     form.setValue("yamlContent", sampleTemplates[template]);
     setYamlContent(sampleTemplates[template]);
   };
-  
-  // Filter components based on search query
+
   const filteredComponents = components.filter(component => {
     if (!searchQuery) return true;
-    
+
     const lowerCaseQuery = searchQuery.toLowerCase();
     return (
       component.name.toLowerCase().includes(lowerCaseQuery) ||
       component.componentGroup.toLowerCase().includes(lowerCaseQuery)
     );
   });
-  
-  // Group components by their componentGroup
+
   const groupedComponents: Record<string, Component[]> = {};
-  
+
   filteredComponents.forEach(component => {
     const group = component.componentGroup;
     if (!groupedComponents[group]) {
@@ -367,7 +334,6 @@ const ComponentsForm: React.FC<ComponentsFormProps> = ({ initialValues, onUpdate
         <CardTitle>API Components</CardTitle>
       </CardHeader>
       <CardContent className="space-y-8">
-        {/* Form for adding or editing components */}
         <Card>
           <CardHeader>
             <CardTitle>{editingIndex !== null ? "Edit Component" : "Add New Component"}</CardTitle>
@@ -383,9 +349,9 @@ const ComponentsForm: React.FC<ComponentsFormProps> = ({ initialValues, onUpdate
                       <FormItem className="flex-1">
                         <FormLabel>Component Name *</FormLabel>
                         <FormControl>
-                          <Input 
-                            placeholder="e.g., UserSchema, ErrorResponse" 
-                            {...field} 
+                          <Input
+                            placeholder="e.g., UserSchema, ErrorResponse"
+                            {...field}
                           />
                         </FormControl>
                         <FormDescription>
@@ -395,7 +361,7 @@ const ComponentsForm: React.FC<ComponentsFormProps> = ({ initialValues, onUpdate
                       </FormItem>
                     )}
                   />
-                  
+
                   <FormField
                     control={form.control}
                     name="componentGroup"
@@ -403,9 +369,9 @@ const ComponentsForm: React.FC<ComponentsFormProps> = ({ initialValues, onUpdate
                       <FormItem className="flex-1">
                         <FormLabel>Component Group *</FormLabel>
                         <FormControl>
-                          <Input 
-                            placeholder="e.g., User, Authentication" 
-                            {...field} 
+                          <Input
+                            placeholder="e.g., User, Authentication"
+                            {...field}
                           />
                         </FormControl>
                         <FormDescription>
@@ -416,7 +382,7 @@ const ComponentsForm: React.FC<ComponentsFormProps> = ({ initialValues, onUpdate
                     )}
                   />
                 </div>
-                
+
                 <div>
                   <label className="text-sm font-medium mb-1 block">Example Templates</label>
                   <div className="flex gap-2 flex-wrap">
@@ -467,14 +433,14 @@ const ComponentsForm: React.FC<ComponentsFormProps> = ({ initialValues, onUpdate
                     </FormItem>
                   )}
                 />
-                
+
                 {validationError && (
                   <div className="bg-destructive/10 text-destructive p-3 rounded-md flex items-start">
                     <AlertCircle className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
                     <p className="text-sm">{validationError}</p>
                   </div>
                 )}
-                
+
                 <div className="flex gap-2">
                   <Button type="submit">
                     {editingIndex !== null ? "Update Component" : "Add Component"}
@@ -489,18 +455,18 @@ const ComponentsForm: React.FC<ComponentsFormProps> = ({ initialValues, onUpdate
             </Form>
           </CardContent>
         </Card>
-        
+
         {/* Component List */}
         <div className="space-y-4">
           <h3 className="text-lg font-semibold">Saved Components</h3>
-          
-          <Input 
-            placeholder="Search components by name or group..." 
+
+          <Input
+            placeholder="Search components by name or group..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="mb-4"
           />
-          
+
           {Object.keys(groupedComponents).length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               No components created yet. Use the form above to create some.
@@ -509,21 +475,21 @@ const ComponentsForm: React.FC<ComponentsFormProps> = ({ initialValues, onUpdate
             Object.keys(groupedComponents).map(group => (
               <div key={group} className="space-y-2">
                 <h4 className="text-md font-semibold">{group}</h4>
-                
+
                 {groupedComponents[group].map((component, index) => {
                   const actualIndex = components.findIndex(
                     c => c.name === component.name && c.type === component.type
                   );
-                  
+
                   return (
                     <div key={`${component.type}-${component.name}-${index}`} className="border rounded-md">
-                      <div 
+                      <div
                         className="flex items-center justify-between p-3 cursor-pointer"
                         onClick={() => toggleComponentExpansion(actualIndex)}
                       >
                         <div className="flex items-center">
-                          {expandedComponents[actualIndex] ? 
-                            <ChevronUp className="h-5 w-5 mr-2" /> : 
+                          {expandedComponents[actualIndex] ?
+                            <ChevronUp className="h-5 w-5 mr-2" /> :
                             <ChevronDown className="h-5 w-5 mr-2" />
                           }
                           <div>
@@ -533,11 +499,11 @@ const ComponentsForm: React.FC<ComponentsFormProps> = ({ initialValues, onUpdate
                             </span>
                           </div>
                         </div>
-                        
+
                         <div className="flex gap-2">
-                          <Button 
-                            type="button" 
-                            size="sm" 
+                          <Button
+                            type="button"
+                            size="sm"
                             variant="outline"
                             onClick={(e) => {
                               e.stopPropagation();
@@ -546,9 +512,9 @@ const ComponentsForm: React.FC<ComponentsFormProps> = ({ initialValues, onUpdate
                           >
                             Edit
                           </Button>
-                          <Button 
-                            type="button" 
-                            size="sm" 
+                          <Button
+                            type="button"
+                            size="sm"
                             variant="destructive"
                             onClick={(e) => {
                               e.stopPropagation();
@@ -559,7 +525,7 @@ const ComponentsForm: React.FC<ComponentsFormProps> = ({ initialValues, onUpdate
                           </Button>
                         </div>
                       </div>
-                      
+
                       {expandedComponents[actualIndex] && (
                         <div className="border-t p-3">
                           <div className="bg-muted rounded-md overflow-hidden" style={{ height: "200px" }}>
@@ -579,7 +545,7 @@ const ComponentsForm: React.FC<ComponentsFormProps> = ({ initialValues, onUpdate
                               theme="vs-dark"
                             />
                           </div>
-                          
+
                           <div className="mt-2 text-sm text-muted-foreground">
                             <p>Reference this component in your paths using:</p>
                             <code className="bg-muted p-1 rounded text-xs">

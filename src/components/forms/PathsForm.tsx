@@ -33,35 +33,10 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogFooter
 } from "@/components/ui/dialog";
 
-// Add localStorage constants at the top of the file
-const LOCAL_STORAGE_PATHS_KEY = "openapibldr_paths";
+import { loadPathsFromLocalStorage, savePathsToLocalStorage } from "./shared/localstorage";
 
-// Function to save paths to localStorage
-const savePathsToLocalStorage = (paths: PathsObject) => {
-  try {
-    localStorage.setItem(LOCAL_STORAGE_PATHS_KEY, JSON.stringify(paths));
-  } catch (error) {
-    console.error("Error saving paths to localStorage:", error);
-  }
-};
-
-// Function to load paths from localStorage
-const loadPathsFromLocalStorage = (): PathsObject | null => {
-  try {
-    const savedPaths = localStorage.getItem(LOCAL_STORAGE_PATHS_KEY);
-    if (savedPaths) {
-      return JSON.parse(savedPaths);
-    }
-  } catch (error) {
-    console.error("Error loading paths from localStorage:", error);
-  }
-  return null;
-};
-
-// Validation schema for path items
 const pathSchema = z.object({
   paths: z.array(
     z.object({
@@ -98,14 +73,12 @@ const pathSchema = z.object({
   ),
 });
 
-// Define proper types for the form values
 type PathsFormValues = z.infer<typeof pathSchema>;
 
 type PathItem = PathsFormValues['paths'][number];
 type OperationItem = PathItem['operations'][number];
 type ResponseItem = OperationItem['responses'][number];
 
-// Define field array paths for type safety
 type NestedFieldArrays = {
   paths: 'paths',
   operations: (pathIndex: number) => `paths.${number}.operations`,
@@ -113,7 +86,6 @@ type NestedFieldArrays = {
   requestContent: (pathIndex: number, operationIndex: number) => `paths.${number}.operations.${number}.requestBody.content`
 };
 
-// Move fieldArrayPaths to module scope so it's accessible to all components
 const fieldArrayPaths: NestedFieldArrays = {
   paths: 'paths',
   operations: (pathIndex) => `paths.${pathIndex}.operations`,
@@ -124,7 +96,7 @@ const fieldArrayPaths: NestedFieldArrays = {
 interface PathsFormProps {
   initialValues: PathsObject;
   onUpdate: (values: PathsObject) => void;
-  components?: ComponentsObject; // Add components as a prop
+  components?: ComponentsObject;
 }
 
 const defaultPath = {
@@ -147,25 +119,99 @@ const defaultPath = {
 };
 
 const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, components }) => {
-  // State for component
   const [expandedPaths, setExpandedPaths] = useState<Record<number, boolean>>({});
   const [expandedOperations, setExpandedOperations] = useState<Record<string, boolean>>({});
   const [selectedOperationForRequestBody, setSelectedOperationForRequestBody] = useState<{ pathIndex: number, operationIndex: number } | null>(null);
   const [requestBodies, setRequestBodies] = useState<Record<string, RequestBodyObject>>({});
   const [isRequestBodyModalOpen, setIsRequestBodyModalOpen] = useState(false);
 
-  // New state for response modal
   const [selectedOperationForResponse, setSelectedOperationForResponse] = useState<{ pathIndex: number, operationIndex: number } | null>(null);
   const [isResponseModalOpen, setIsResponseModalOpen] = useState(false);
   const [responseToEdit, setResponseToEdit] = useState<{ index: number, data: any } | null>(null);
 
-  // Initialize form values
   const getInitialFormValues = () => {
+    const savedPaths = loadPathsFromLocalStorage();
+    if (Object.keys(savedPaths).length > 0) {
+      const paths: any[] = [];
+
+      Object.entries(savedPaths).forEach(([pathUrl, pathItem]) => {
+        const operations: any[] = [];
+
+        const methods = httpMethods.filter(method =>
+          Object.prototype.hasOwnProperty.call(pathItem, method)
+        );
+
+        methods.forEach(method => {
+          const operation = pathItem[method as keyof PathItemObject] as OperationObject;
+          if (operation) {
+            const responses: any[] = [];
+
+            if (operation.responses) {
+              Object.entries(operation.responses).forEach(([statusCode, response]) => {
+                if (response && typeof response !== 'function') {
+                  responses.push({
+                    statusCode,
+                    description: 'description' in response ? response.description : 'Response',
+                    schemaRef: 'schemaRef' in response ? response.schemaRef : '',
+                  });
+                }
+              });
+            }
+
+            let requestBody: any = undefined;
+            if (operation.requestBody && typeof operation.requestBody !== 'function') {
+              const reqBody = operation.requestBody;
+              if ('content' in reqBody) {
+                const contentArray = Object.entries(reqBody.content).map(([contentType, mediaType]) => ({
+                  contentType,
+                  schemaRef: mediaType.schema && '$ref' in mediaType.schema ? mediaType.schema.$ref : '',
+                }));
+
+                requestBody = {
+                  description: reqBody.description || '',
+                  required: reqBody.required || false,
+                  content: contentArray.length > 0 ? contentArray : [{ contentType: 'application/json', schemaRef: '' }]
+                };
+              }
+            }
+
+            operations.push({
+              method,
+              summary: operation.summary || '',
+              description: operation.description || '',
+              operationId: operation.operationId || '',
+              tags: operation.tags || [],
+              requestBody,
+              responses: responses.length > 0 ? responses : [
+                { statusCode: "200", description: "Successful operation", schemaRef: "" }
+              ],
+            });
+          }
+        });
+
+        paths.push({
+          path: pathUrl,
+          summary: pathItem.summary || '',
+          description: pathItem.description || '',
+          operations: operations.length > 0 ? operations : [
+            {
+              method: "get",
+              summary: "",
+              description: "",
+              operationId: "",
+              tags: [],
+              responses: [
+                { statusCode: "200", description: "Successful operation", schemaRef: "" }
+              ],
+            }
+          ],
+        });
+      });
+
+      return { paths: paths.length > 0 ? paths : [defaultPath] };
+    }
+
     if (!initialValues || Object.keys(initialValues).length === 0) {
-      const savedPaths = loadPathsFromLocalStorage();
-      if (savedPaths) {
-        return { paths: Object.values(savedPaths) };
-      }
       return { paths: [defaultPath] };
     }
 
@@ -173,8 +219,6 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
 
     Object.entries(initialValues).forEach(([pathUrl, pathItem]) => {
       const operations: any[] = [];
-
-      // Extract operations from the path item
       const methods = httpMethods.filter(method =>
         Object.prototype.hasOwnProperty.call(pathItem, method)
       );
@@ -184,7 +228,6 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
         if (operation) {
           const responses: any[] = [];
 
-          // Extract responses for each operation
           if (operation.responses) {
             Object.entries(operation.responses).forEach(([statusCode, response]) => {
               if (response && typeof response !== 'function') {
@@ -197,7 +240,6 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
             });
           }
 
-          // Extract request body content as array for the form
           let requestBody: any = undefined;
           if (operation.requestBody && typeof operation.requestBody !== 'function') {
             const reqBody = operation.requestBody;
@@ -251,26 +293,21 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
     return { paths: paths.length > 0 ? paths : [defaultPath] };
   };
 
-  // Setup form with react-hook-form
   const form = useForm<PathsFormValues>({
     resolver: zodResolver(pathSchema),
     defaultValues: getInitialFormValues()
   });
 
-  // Define field arrays once at the top level
   const { fields: pathFields, append: appendPath, remove: removePath } = useFieldArray({
     name: fieldArrayPaths.paths,
     control: form.control,
   });
 
-  // Handle form submission to convert form data to OpenAPI format
   const handleSubmit = useCallback((values: PathsFormValues) => {
-    // Convert form values back to OpenAPI paths format
     const pathsObject: PathsObject = {};
 
     values.paths.forEach(path => {
-      // Ensure path exists and starts with a forward slash
-      if (!path || !path.path) return; // Skip this path if undefined
+      if (!path?.path) return;
 
       const pathValue = path.path.startsWith('/') ? path.path : `/${path.path}`;
 
@@ -279,9 +316,7 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
         description: path.description || undefined,
       };
 
-      // Add operations to the path item
       path.operations.forEach(operation => {
-        // Skip undefined operations
         if (!operation) return;
 
         const operationObject: OperationObject = {
@@ -292,12 +327,9 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
           responses: {},
         };
 
-        // Add responses to the operation
         operation.responses.forEach(response => {
-          // Skip undefined responses
           if (!response) return;
 
-          // Handle schema reference in response
           if (response.schemaRef && response.schemaRef !== "none") {
             operationObject.responses[response.statusCode] = {
               description: response.description,
@@ -316,7 +348,6 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
           }
         });
 
-        // Add request body if it exists in form data
         if (operation.requestBody && operation.requestBody.content && operation.requestBody.content.length > 0) {
           const requestBodyObj: RequestBodyObject = {
             description: operation.requestBody.description,
@@ -324,7 +355,6 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
             content: {}
           };
 
-          // Convert content array to content object
           operation.requestBody.content.forEach(content => {
             if (content.contentType) {
               requestBodyObj.content[content.contentType] = {
@@ -335,7 +365,6 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
 
           operationObject.requestBody = requestBodyObj;
         }
-        // Fallback to the old requestBodies state if needed
         else {
           const requestBodyKey = `${pathValue}-${operation.method}`;
           if (requestBodies[requestBodyKey]) {
@@ -343,22 +372,20 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
           }
         }
 
-        // Add operation to path item using the HTTP method as the key
         pathItemObject[operation.method as keyof PathItemObject] = operationObject as any;
       });
 
       pathsObject[pathValue] = pathItemObject;
     });
 
-    onUpdate(pathsObject);
     savePathsToLocalStorage(pathsObject);
+
+    onUpdate(pathsObject);
   }, [onUpdate, requestBodies]);
 
-  // Add a new path and expand it
   const addNewPath = useCallback(() => {
     const newPathIndex = pathFields.length;
 
-    // Add the new path
     appendPath({
       path: `/new-path-${newPathIndex + 1}`,
       summary: "",
@@ -377,26 +404,22 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
       ],
     });
 
-    // Auto-expand the new path
     setTimeout(() => {
       setExpandedPaths(prev => ({
         ...prev,
         [newPathIndex]: true
       }));
 
-      // Also scroll to it
       const newPathElement = document.getElementById(`path-${newPathIndex}`);
       if (newPathElement) {
         newPathElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
 
-      // Trigger form submission
       const formData = form.getValues();
       handleSubmit(formData);
     }, 100);
   }, [pathFields.length, appendPath, handleSubmit, form]);
 
-  // Toggle path expansion
   const togglePathExpansion = useCallback((index: number) => {
     setExpandedPaths(prev => ({
       ...prev,
@@ -404,7 +427,6 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
     }));
   }, []);
 
-  // Toggle operation expansion
   const toggleOperationExpansion = useCallback((pathIndex: number, operationIndex: number) => {
     const key = `${pathIndex}-${operationIndex}`;
     setExpandedOperations(prev => ({
@@ -413,26 +435,21 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
     }));
   }, []);
 
-  // Handle request body updates
   const handleUpdateRequestBody = useCallback((requestBody: RequestBodyObject) => {
     if (selectedOperationForRequestBody) {
       const { pathIndex, operationIndex } = selectedOperationForRequestBody;
       let path = form.getValues(`paths.${pathIndex}.path`) || '';
       const method = form.getValues(`paths.${pathIndex}.operations.${operationIndex}.method`) || 'get';
 
-      // Ensure path starts with a forward slash for consistent keys
       path = path.startsWith('/') ? path : `/${path}`;
       const key = `${path}-${method}`;
 
-      // Update the request bodies state
       setRequestBodies(prev => ({
         ...prev,
         [key]: requestBody
       }));
 
-      // Also convert and update the form data structure for immediate reflection in the UI
       if (requestBody && requestBody.content) {
-        // Create content array from the request body content object
         const contentArray = Object.entries(requestBody.content).map(([contentType, mediaTypeObj]) => {
           let schemaRef = '';
           if (mediaTypeObj.schema && '$ref' in mediaTypeObj.schema) {
@@ -444,7 +461,6 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
           };
         });
 
-        // Update the form with the new request body data
         form.setValue(`paths.${pathIndex}.operations.${operationIndex}.requestBody`, {
           description: requestBody.description || '',
           required: requestBody.required || false,
@@ -452,17 +468,14 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
         });
       }
 
-      // Close the request body editor modal
       setIsRequestBodyModalOpen(false);
       setSelectedOperationForRequestBody(null);
 
-      // Trigger form submission to update the preview immediately
       const formData = form.getValues();
       handleSubmit(formData);
     }
   }, [selectedOperationForRequestBody, form, handleSubmit]);
 
-  // Helper to create a request body that references a schema
   const createSchemaBasedRequestBody = useCallback((schemaRef: string, contentType: string = 'application/json') => {
     return {
       description: `Request body using ${schemaRef.split('/').pop()}`,
@@ -477,13 +490,11 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
     };
   }, []);
 
-  // Handle response updates
   const handleUpdateResponse = useCallback((response: any) => {
     if (selectedOperationForResponse) {
       const { pathIndex, operationIndex } = selectedOperationForResponse;
 
       if (responseToEdit) {
-        // Update existing response
         const responseIndex = responseToEdit.index;
         form.setValue(`paths.${pathIndex}.operations.${operationIndex}.responses.${responseIndex}`, {
           statusCode: response.statusCode,
@@ -491,10 +502,8 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
           schemaRef: response.schemaRef || ""
         });
       } else {
-        // Add new response directly to the form values
         const currentResponses = form.getValues(`paths.${pathIndex}.operations.${operationIndex}.responses`) || [];
 
-        // Append the new response
         form.setValue(`paths.${pathIndex}.operations.${operationIndex}.responses`, [
           ...currentResponses,
           {
@@ -505,12 +514,10 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
         ]);
       }
 
-      // Close the response editor modal
       setIsResponseModalOpen(false);
       setSelectedOperationForResponse(null);
       setResponseToEdit(null);
 
-      // Trigger form submission to update the preview immediately
       setTimeout(() => {
         const formData = form.getValues();
         handleSubmit(formData);
@@ -518,9 +525,7 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
     }
   }, [selectedOperationForResponse, responseToEdit, form, handleSubmit]);
 
-  // Submit the form with debounce when it changes
   useEffect(() => {
-    // Debounce function to prevent excessive form submissions
     const debounce = (func: Function, delay: number) => {
       let timeoutId: ReturnType<typeof setTimeout>;
       return (...args: any[]) => {
@@ -542,7 +547,6 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
     return () => subscription.unsubscribe();
   }, [form, handleSubmit]);
 
-  // Main component render
   return (
     <>
       <Card>

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -15,6 +15,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
+// Import localStorage utilities
+import { loadInfoFromLocalStorage, saveInfoToLocalStorage } from "./shared/localstorage";
 
 // Validation schema for API info
 const infoSchema = z.object({
@@ -39,24 +42,34 @@ interface InfoFormProps {
 }
 
 const InfoForm: React.FC<InfoFormProps> = ({ initialValues, onUpdate }) => {
+  // Try to load info from localStorage first
+  const savedInfo = loadInfoFromLocalStorage();
+  
   const form = useForm<z.infer<typeof infoSchema>>({
     resolver: zodResolver(infoSchema),
     defaultValues: {
-      title: initialValues.title || "",
-      version: initialValues.version || "1.0.0",
-      description: initialValues.description || "",
-      termsOfService: initialValues.termsOfService || "",
+      title: savedInfo?.title || initialValues.title || "",
+      version: savedInfo?.version || initialValues.version || "1.0.0",
+      description: savedInfo?.description || initialValues.description || "",
+      termsOfService: savedInfo?.termsOfService || initialValues.termsOfService || "",
       contact: {
-        name: initialValues.contact?.name || "",
-        url: initialValues.contact?.url || "",
-        email: initialValues.contact?.email || "",
+        name: savedInfo?.contact?.name || initialValues.contact?.name || "",
+        url: savedInfo?.contact?.url || initialValues.contact?.url || "",
+        email: savedInfo?.contact?.email || initialValues.contact?.email || "",
       },
       license: {
-        name: initialValues.license?.name || "",
-        url: initialValues.license?.url || "",
+        name: savedInfo?.license?.name || initialValues.license?.name || "",
+        url: savedInfo?.license?.url || initialValues.license?.url || "",
       },
     },
   });
+
+  // If we loaded saved info from localStorage, update the parent component
+  useEffect(() => {
+    if (savedInfo) {
+      onUpdate(savedInfo);
+    }
+  }, [savedInfo, onUpdate]);
 
   const handleSubmit = (values: z.infer<typeof infoSchema>) => {
     // Clean up empty strings for optional fields
@@ -87,6 +100,10 @@ const InfoForm: React.FC<InfoFormProps> = ({ initialValues, onUpdate }) => {
       license: hasLicenseValues ? cleanValues.license : undefined,
     };
     
+    // Save to localStorage
+    saveInfoToLocalStorage(finalValues as InfoObject);
+    
+    // Update parent component
     onUpdate(finalValues as InfoObject);
   };
 
