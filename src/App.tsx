@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import './App.css'
 import { defaultOpenAPISpec } from './lib/utils/defaults'
 import { OpenAPISchema } from './lib/types'
 import InfoForm from './components/forms/InfoForm'
@@ -28,6 +27,7 @@ function App() {
   }
 
   const updatePaths = (paths: OpenAPISchema['paths']) => {
+    console.log("Updating paths:", paths)
     setSchema(prev => ({ ...prev, paths }))
   }
 

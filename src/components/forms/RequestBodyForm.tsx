@@ -25,21 +25,38 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { schemaTypes } from "@/lib/utils/defaults";
 import { Plus, Trash2, ChevronDown, ChevronUp } from "lucide-react";
+import { yamlToJson } from "@/lib/utils/converters";
 
 // Add localStorage constants for schemas
 const LOCAL_STORAGE_COMPONENTS_KEY = "openapibldr_components";
 
+export interface OpenApiLocalStorageComponent {
+  name: string
+  type: 'string' | 'number' | 'integer' | 'boolean' | 'object' | 'array' | 'null'
+  componentGroup: string
+  yamlContent: string
+}
+
 // Function to load components (including schemas) from localStorage
-const loadComponentsFromLocalStorage = () => {
+const loadComponentsFromLocalStorage = (): ComponentsObject => {
   try {
     const savedComponents = localStorage.getItem(LOCAL_STORAGE_COMPONENTS_KEY);
     if (savedComponents) {
-      return JSON.parse(savedComponents);
+      const localStorageComponents = JSON.parse(savedComponents) as OpenApiLocalStorageComponent[];
+      const schemas: ComponentsObject["schemas"] = localStorageComponents.reduce((acc, component) => {
+        const { name, type } = component;
+        acc[name] = { type };
+        return acc;
+      }, {} as Record<string, SchemaObject>);
+      const compoents: ComponentsObject = {
+        schemas: schemas
+      } 
+      return compoents
     }
   } catch (error) {
     console.error("Error loading components from localStorage:", error);
   }
-  return null;
+  return {};
 };
 
 // Schema for request body validation
@@ -78,12 +95,12 @@ interface RequestBodyFormProps {
 
 const RequestBodyForm: React.FC<RequestBodyFormProps> = ({ initialValue, onUpdate, components }) => {
   const [expandedContentTypes, setExpandedContentTypes] = useState<Record<number, boolean>>({});
-  
+
   const [localStorageComponents, setLocalStorageComponents] = useState<ComponentsObject | null>(null);
   useEffect(() => {
     setLocalStorageComponents(loadComponentsFromLocalStorage());
   }, []);
-  
+
   const getInitialValues = (): RequestBodyFormValues => {
     if (!initialValue) {
       return {
@@ -105,21 +122,21 @@ const RequestBodyForm: React.FC<RequestBodyFormProps> = ({ initialValue, onUpdat
         ],
       };
     }
-    
+
     const contentArray: RequestBodyFormValues['content'] = Object.entries(initialValue.content || {}).map(([contentType, mediaType]) => {
       const hasSchemaRef = mediaType.schema && '$ref' in mediaType.schema;
       const schemaRef = (hasSchemaRef ? mediaType?.schema as ReferenceObject : {}).$ref || "";
-      
+
       const properties = !hasSchemaRef && mediaType.schema && 'properties' in mediaType.schema && mediaType.schema.properties
         ? Object.entries(mediaType.schema.properties).map(([name, prop]) => {
-            const typedProp = prop as SchemaObject;
-            return {
-              name,
-              type: typedProp.type || "string",
-              description: typedProp.description || "",
-              required: !!initialValue.required,
-            };
-          })
+          const typedProp = prop as SchemaObject;
+          return {
+            name,
+            type: typedProp.type || "string",
+            description: typedProp.description || "",
+            required: !!initialValue.required,
+          };
+        })
         : [];
 
       return {
@@ -134,7 +151,7 @@ const RequestBodyForm: React.FC<RequestBodyFormProps> = ({ initialValue, onUpdat
         },
       };
     });
-    
+
     return {
       description: initialValue.description || "",
       required: initialValue.required || false,
@@ -146,12 +163,12 @@ const RequestBodyForm: React.FC<RequestBodyFormProps> = ({ initialValue, onUpdat
     resolver: zodResolver(requestBodySchema),
     defaultValues: getInitialValues(),
   });
-  
+
   const { fields: contentFields, append: appendContent, remove: removeContent } = useFieldArray({
     name: "content",
     control: form.control,
   });
-  
+
   // Create property field arrays for all content types at once to fix the hooks order issue
   // We'll create arrays for all possible indices up to max content length to ensure stable hooks order
   const MAX_CONTENT_TYPES = 10; // Set a reasonable maximum
@@ -166,77 +183,81 @@ const RequestBodyForm: React.FC<RequestBodyFormProps> = ({ initialValue, onUpdat
     // Return a dummy field array for slots that don't have content yet
     return {
       fields: [],
-      append: () => {},
-      prepend: () => {},
-      remove: () => {},
-      swap: () => {},
-      move: () => {},
-      insert: () => {},
-      update: () => {},
-      replace: () => {}
+      append: () => { },
+      prepend: () => { },
+      remove: () => { },
+      swap: () => { },
+      move: () => { },
+      insert: () => { },
+      update: () => { },
+      replace: () => { }
     };
   });
-  
+
   const toggleContentExpansion = (index: number) => {
     setExpandedContentTypes(prev => ({
       ...prev,
       [index]: !prev[index],
     }));
   };
-  
+
+  // Update the handleSubmit function to ensure the requestBody is formatted correctly
   const handleSubmit = (values: RequestBodyFormValues) => {
-    // Convert form values to RequestBodyObject
     const requestBody: RequestBodyObject = {
       description: values.description || undefined,
-      required: values.required,
+      required: values.required || false,
       content: {},
     };
-    
-    // Add content media types
-    values.content.forEach(item => {
-      // If using a schema reference
-      if (item.useSchemaRef && item.schemaRef) {
-        requestBody.content[item.contentType] = {
-          schema: {
-            $ref: item.schemaRef
-          }
-        };
-      } else {
-        // Otherwise use inline schema
-        const mediaType: MediaTypeObject = {
-          schema: {
-            type: item.schema.type,
-            format: item.schema.format || undefined,
-            description: item.schema.description || undefined,
-          } as SchemaObject,
-        };
+
+    // Make sure content array exists before looping
+    if (values.content) {
+      values.content.forEach(item => {
+        if (!item || !item.contentType) return; // Skip if item or contentType is missing
         
-        // Add properties to schema if type is object
-        if (item.schema.type === "object" && item.schema.properties) {
-          const properties: Record<string, SchemaObject> = {};
-          const required: string[] = [];
-          
-          item.schema.properties.forEach(prop => {
-            properties[prop.name] = {
-              type: prop.type,
-              description: prop.description || undefined,
-            };
-            
-            if (prop.required) {
-              required.push(prop.name);
+        if (item.useSchemaRef && item.schemaRef) {
+          requestBody.content[item.contentType] = {
+            schema: {
+              $ref: item.schemaRef
             }
-          });
-          
-          (mediaType.schema as SchemaObject).properties = properties;
-          if (required.length > 0) {
-            (mediaType.schema as SchemaObject).required = required;
+          };
+        } else if (item.schema) {
+          const mediaType: MediaTypeObject = {
+            schema: {
+              type: item.schema.type,
+              format: item.schema.format || undefined,
+              description: item.schema.description || undefined,
+            } as SchemaObject,
+          };
+
+          if (item.schema.type === "object" && item.schema.properties) {
+            const properties: Record<string, SchemaObject> = {};
+            const required: string[] = [];
+
+            item.schema.properties.forEach(prop => {
+              if (!prop || !prop.name) return; // Skip if property is missing
+              
+              properties[prop.name] = {
+                type: prop.type,
+                description: prop.description || undefined,
+              };
+
+              if (prop.required) {
+                required.push(prop.name);
+              }
+            });
+
+            (mediaType.schema as SchemaObject).properties = properties;
+            if (required.length > 0) {
+              (mediaType.schema as SchemaObject).required = required;
+            }
           }
+
+          requestBody.content[item.contentType] = mediaType;
         }
-        
-        requestBody.content[item.contentType] = mediaType;
-      }
-    });
+      });
+    }
     
+    console.log("Request Body:", requestBody);
     onUpdate(requestBody);
   };
 
@@ -252,16 +273,16 @@ const RequestBodyForm: React.FC<RequestBodyFormProps> = ({ initialValue, onUpdat
                 <FormItem>
                   <FormLabel>Description</FormLabel>
                   <FormControl>
-                    <Textarea 
+                    <Textarea
                       placeholder="Description of the request body"
-                      {...field} 
+                      {...field}
                     />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            
+
             <FormField
               control={form.control}
               name="required"
@@ -286,13 +307,13 @@ const RequestBodyForm: React.FC<RequestBodyFormProps> = ({ initialValue, onUpdat
                 </FormItem>
               )}
             />
-            
+
             <div className="space-y-4">
               <h3 className="text-lg font-medium">Content Types</h3>
-              
+
               {contentFields.map((field, index) => (
                 <div key={field.id} className="border rounded-md p-4">
-                  <div 
+                  <div
                     className="flex items-center justify-between cursor-pointer"
                     onClick={() => toggleContentExpansion(index)}
                   >
@@ -306,7 +327,7 @@ const RequestBodyForm: React.FC<RequestBodyFormProps> = ({ initialValue, onUpdat
                         {form.watch(`content.${index}.contentType`) || `Content Type ${index + 1}`}
                       </h4>
                     </div>
-                    
+
                     {contentFields.length > 1 && (
                       <Button
                         type="button"
@@ -322,7 +343,7 @@ const RequestBodyForm: React.FC<RequestBodyFormProps> = ({ initialValue, onUpdat
                       </Button>
                     )}
                   </div>
-                  
+
                   {expandedContentTypes[index] && (
                     <div className="space-y-4 mt-4">
                       <FormField
@@ -341,7 +362,7 @@ const RequestBodyForm: React.FC<RequestBodyFormProps> = ({ initialValue, onUpdat
                           </FormItem>
                         )}
                       />
-                      
+
                       <FormField
                         control={form.control}
                         name={`content.${index}.useSchemaRef`}
@@ -395,7 +416,7 @@ const RequestBodyForm: React.FC<RequestBodyFormProps> = ({ initialValue, onUpdat
                                       ))}
                                     </div>
                                   )}
-                                  
+
                                   {/* Display option group for localStorage schemas */}
                                   {localStorageComponents?.schemas && Object.keys(localStorageComponents.schemas).length > 0 && (
                                     <div className="p-2 border-t">
@@ -409,14 +430,14 @@ const RequestBodyForm: React.FC<RequestBodyFormProps> = ({ initialValue, onUpdat
                                         ))}
                                     </div>
                                   )}
-                                  
+
                                   {/* Show message if no schemas are available */}
                                   {(!components?.schemas || Object.keys(components?.schemas || {}).length === 0) &&
-                                   (!localStorageComponents?.schemas || Object.keys(localStorageComponents?.schemas || {}).length === 0) && (
-                                    <div className="p-2 text-center text-sm text-muted-foreground">
-                                      No schemas available. Create schemas in the Components section first.
-                                    </div>
-                                  )}
+                                    (!localStorageComponents?.schemas || Object.keys(localStorageComponents?.schemas || {}).length === 0) && (
+                                      <div className="p-2 text-center text-sm text-muted-foreground">
+                                        No schemas available. Create schemas in the Components section first.
+                                      </div>
+                                    )}
                                 </SelectContent>
                               </Select>
                               <FormMessage />
@@ -426,15 +447,15 @@ const RequestBodyForm: React.FC<RequestBodyFormProps> = ({ initialValue, onUpdat
                       ) : (
                         <div className="space-y-4">
                           <h5 className="text-md font-medium">Schema</h5>
-                          
+
                           <FormField
                             control={form.control}
                             name={`content.${index}.schema.type`}
                             render={({ field }) => (
                               <FormItem>
                                 <FormLabel>Type *</FormLabel>
-                                <Select 
-                                  onValueChange={field.onChange} 
+                                <Select
+                                  onValueChange={field.onChange}
                                   defaultValue={field.value}
                                 >
                                   <FormControl>
@@ -454,7 +475,7 @@ const RequestBodyForm: React.FC<RequestBodyFormProps> = ({ initialValue, onUpdat
                               </FormItem>
                             )}
                           />
-                          
+
                           <FormField
                             control={form.control}
                             name={`content.${index}.schema.format`}
@@ -468,7 +489,7 @@ const RequestBodyForm: React.FC<RequestBodyFormProps> = ({ initialValue, onUpdat
                               </FormItem>
                             )}
                           />
-                          
+
                           <FormField
                             control={form.control}
                             name={`content.${index}.schema.description`}
@@ -482,24 +503,24 @@ const RequestBodyForm: React.FC<RequestBodyFormProps> = ({ initialValue, onUpdat
                               </FormItem>
                             )}
                           />
-                          
+
                           {/* Show properties if schema type is object */}
                           {form.watch(`content.${index}.schema.type`) === 'object' && (
                             <div className="mt-4">
                               <h6 className="text-sm font-medium mb-2">Properties</h6>
-                              
+
                               {(() => {
                                 // Get the property field array for this specific content index
-                                const { fields: propertyFields, append: appendProperty, remove: removeProperty } = 
+                                const { fields: propertyFields, append: appendProperty, remove: removeProperty } =
                                   propertyFieldArrays[index];
-                                  
+
                                 return (
                                   <>
                                     {propertyFields.map((propField, propIndex) => (
                                       <div key={propField.id} className="border rounded-md p-3 mb-3 space-y-3">
                                         <div className="flex justify-between items-center">
                                           <h6 className="text-sm font-medium">Property {propIndex + 1}</h6>
-                                          
+
                                           {propertyFields.length > 1 && (
                                             <Button
                                               type="button"
@@ -511,7 +532,7 @@ const RequestBodyForm: React.FC<RequestBodyFormProps> = ({ initialValue, onUpdat
                                             </Button>
                                           )}
                                         </div>
-                                        
+
                                         <FormField
                                           control={form.control}
                                           name={`content.${index}.schema.properties.${propIndex}.name`}
@@ -525,15 +546,15 @@ const RequestBodyForm: React.FC<RequestBodyFormProps> = ({ initialValue, onUpdat
                                             </FormItem>
                                           )}
                                         />
-                                        
+
                                         <FormField
                                           control={form.control}
                                           name={`content.${index}.schema.properties.${propIndex}.type`}
                                           render={({ field }) => (
                                             <FormItem>
                                               <FormLabel>Type *</FormLabel>
-                                              <Select 
-                                                onValueChange={field.onChange} 
+                                              <Select
+                                                onValueChange={field.onChange}
                                                 defaultValue={field.value}
                                               >
                                                 <FormControl>
@@ -553,7 +574,7 @@ const RequestBodyForm: React.FC<RequestBodyFormProps> = ({ initialValue, onUpdat
                                             </FormItem>
                                           )}
                                         />
-                                        
+
                                         <FormField
                                           control={form.control}
                                           name={`content.${index}.schema.properties.${propIndex}.description`}
@@ -567,7 +588,7 @@ const RequestBodyForm: React.FC<RequestBodyFormProps> = ({ initialValue, onUpdat
                                             </FormItem>
                                           )}
                                         />
-                                        
+
                                         <FormField
                                           control={form.control}
                                           name={`content.${index}.schema.properties.${propIndex}.required`}
@@ -587,16 +608,16 @@ const RequestBodyForm: React.FC<RequestBodyFormProps> = ({ initialValue, onUpdat
                                         />
                                       </div>
                                     ))}
-                                    
+
                                     <Button
                                       type="button"
                                       variant="outline"
                                       size="sm"
-                                      onClick={() => appendProperty({ 
-                                        name: "", 
-                                        type: "string", 
+                                      onClick={() => appendProperty({
+                                        name: "",
+                                        type: "string",
                                         description: "",
-                                        required: false 
+                                        required: false
                                       })}
                                       className="mt-2"
                                     >
@@ -614,7 +635,7 @@ const RequestBodyForm: React.FC<RequestBodyFormProps> = ({ initialValue, onUpdat
                   )}
                 </div>
               ))}
-              
+
               <Button
                 type="button"
                 variant="outline"
@@ -646,9 +667,9 @@ const RequestBodyForm: React.FC<RequestBodyFormProps> = ({ initialValue, onUpdat
           </div>
         </form>
       </Form>
-      <Button 
-        type="button" 
-        onClick={() => handleSubmit(form.getValues())} 
+      <Button
+        type="button"
+        onClick={() => handleSubmit(form.getValues())}
         className="w-full"
       >
         Save Request Body

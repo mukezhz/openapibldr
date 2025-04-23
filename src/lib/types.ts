@@ -161,7 +161,7 @@ export interface TagObject {
 }
 
 export interface ReferenceObject {
-  $ref: string;
+  $ref?: string;
 }
 
 export interface SchemaObject {

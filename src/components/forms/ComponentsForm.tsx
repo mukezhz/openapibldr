@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { ComponentsObject } from "@/lib/types";
+import { ComponentsObject, SchemaObject } from "@/lib/types";
 import {
   Form,
   FormControl,
@@ -245,7 +245,7 @@ const ComponentsForm: React.FC<ComponentsFormProps> = ({ initialValues, onUpdate
     // Group by type
     newComponents.forEach(component => {
       try {
-        const parsedContent = yaml.load(component.yamlContent);
+        const parsedContent = yaml.load(component.yamlContent) as SchemaObject;
         
         switch (component.type) {
           case "schema":

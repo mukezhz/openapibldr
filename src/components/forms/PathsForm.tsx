@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { useFieldArray, useForm } from "react-hook-form";
+import { useFieldArray, useForm, Control, UseFormReturn, FieldArrayWithId } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { PathsObject, PathItemObject, OperationObject, RequestBodyObject, ComponentsObject } from "@/lib/types";
@@ -73,7 +73,7 @@ const pathSchema = z.object({
           summary: z.string().optional(),
           description: z.string().optional(),
           operationId: z.string().optional(),
-          tags: z.array(z.string()).optional().default([]),
+          tags: z.array(z.string()),
           responses: z.array(
             z.object({
               statusCode: z.string().min(1, { message: "Status code is required" }),
@@ -87,7 +87,26 @@ const pathSchema = z.object({
   ),
 });
 
+// Define proper types for the form values
 type PathsFormValues = z.infer<typeof pathSchema>;
+
+type PathItem = PathsFormValues['paths'][number];
+type OperationItem = PathItem['operations'][number];
+type ResponseItem = OperationItem['responses'][number];
+
+// Define field array paths for type safety
+type NestedFieldArrays = {
+  paths: 'paths',
+  operations: (pathIndex: number) => `paths.${number}.operations`,
+  responses: (pathIndex: number, operationIndex: number) => `paths.${number}.operations.${number}.responses`
+};
+
+// Move fieldArrayPaths to module scope so it's accessible to all components
+const fieldArrayPaths: NestedFieldArrays = {
+  paths: 'paths',
+  operations: (pathIndex) => `paths.${pathIndex}.operations`,
+  responses: (pathIndex, operationIndex) => `paths.${pathIndex}.operations.${operationIndex}.responses`,
+};
 
 interface PathsFormProps {
   initialValues: PathsObject;
@@ -214,8 +233,8 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
   });
 
   // Define field arrays once at the top level
-  const { fields: pathFields, append: appendPath, remove: removePath } = useFieldArray<PathsFormValues["paths"][number]>({
-    name: "paths",
+  const { fields: pathFields, append: appendPath, remove: removePath } = useFieldArray({
+    name: fieldArrayPaths.paths,
     control: form.control,
   });
 
@@ -225,6 +244,11 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
     const pathsObject: PathsObject = {};
 
     values.paths.forEach(path => {
+      // Ensure path exists and starts with a forward slash
+      if (!path || !path.path) return; // Skip this path if undefined
+      
+      const pathValue = path.path.startsWith('/') ? path.path : `/${path.path}`;
+      
       const pathItemObject: PathItemObject = {
         summary: path.summary || undefined,
         description: path.description || undefined,
@@ -232,6 +256,9 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
 
       // Add operations to the path item
       path.operations.forEach(operation => {
+        // Skip undefined operations
+        if (!operation) return;
+        
         const operationObject: OperationObject = {
           summary: operation.summary || undefined,
           description: operation.description || undefined,
@@ -242,6 +269,9 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
 
         // Add responses to the operation
         operation.responses.forEach(response => {
+          // Skip undefined responses
+          if (!response) return;
+          
           // Handle schema reference in response
           if (response.schemaRef && response.schemaRef !== "none") {
             operationObject.responses[response.statusCode] = {
@@ -262,7 +292,7 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
         });
 
         // Add request body if it exists
-        const requestBodyKey = `${path.path}-${operation.method}`;
+        const requestBodyKey = `${pathValue}-${operation.method}`;
         if (requestBodies[requestBodyKey]) {
           operationObject.requestBody = requestBodies[requestBodyKey];
         }
@@ -271,7 +301,7 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
         pathItemObject[operation.method as keyof PathItemObject] = operationObject as any;
       });
 
-      pathsObject[path.path] = pathItemObject;
+      pathsObject[pathValue] = pathItemObject;
     });
 
     onUpdate(pathsObject);
@@ -341,8 +371,11 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
   const handleUpdateRequestBody = useCallback((requestBody: RequestBodyObject) => {
     if (selectedOperationForRequestBody) {
       const { pathIndex, operationIndex } = selectedOperationForRequestBody;
-      const path = form.getValues(`paths.${pathIndex}.path`);
-      const method = form.getValues(`paths.${pathIndex}.operations.${operationIndex}.method`);
+      let path = form.getValues(`paths.${pathIndex}.path`) || '';
+      const method = form.getValues(`paths.${pathIndex}.operations.${operationIndex}.method`) || 'get';
+      
+      // Ensure path starts with a forward slash for consistent keys
+      path = path.startsWith('/') ? path : `/${path}`;
       const key = `${path}-${method}`;
 
       setRequestBodies(prev => ({
@@ -484,7 +517,7 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
 
 type PathItemParams = {
   pathIndex: number;
-  form: any;
+  form: UseFormReturn<PathsFormValues>; // Use proper form type
   expandedPaths: Record<number, boolean>;
   expandedOperations: Record<string, boolean>;
   togglePathExpansion: (index: number) => void;
@@ -494,7 +527,7 @@ type PathItemParams = {
   setIsRequestBodyModalOpen: (value: boolean) => void;
   requestBodies: Record<string, RequestBodyObject>;
   handleSubmit: (values: PathsFormValues) => void;
-  pathFields: any[];
+  pathFields: FieldArrayWithId<PathsFormValues, "paths", "id">[];
   components?: ComponentsObject; // Add components as a prop
 }
 // Separate component for each path to isolate hook calls
@@ -515,7 +548,7 @@ const PathItem = ({
 }: PathItemParams) => {
   // Create a field array for operations within this specific path
   const { fields: operationFields, append: appendOperation, remove: removeOperation } = useFieldArray({
-    name: `paths.${pathIndex}.operations`,
+    name: fieldArrayPaths.operations(pathIndex) as any,
     control: form.control,
   });
 
@@ -671,7 +704,7 @@ const PathItem = ({
 type OperationItemParams = {
   pathIndex: number;
   operationIndex: number;
-  form: any;
+  form: UseFormReturn<PathsFormValues>; // Use proper form type
   expandedOperations: Record<string, boolean>;
   toggleOperationExpansion: (pathIndex: number, operationIndex: number) => void;
   removeOperation: (index: number) => void;
@@ -679,7 +712,7 @@ type OperationItemParams = {
   setIsRequestBodyModalOpen: (value: boolean) => void;
   requestBodies: Record<string, RequestBodyObject>;
   handleSubmit: (values: PathsFormValues) => void;
-  operationFields: any[];
+  operationFields: FieldArrayWithId<PathsFormValues, `paths.${number}.operations`, "id">[];
   components?: ComponentsObject; // Add components as a prop
 }
 // Separate component for each operation to isolate hook calls
@@ -704,7 +737,7 @@ const OperationItem: React.FC<OperationItemParams> = ({
 
   // Create a field array for responses within this specific operation
   const { fields: responseFields, append: appendResponse, remove: removeResponse } = useFieldArray({
-    name: `paths.${pathIndex}.operations.${operationIndex}.responses`,
+    name: fieldArrayPaths.responses(pathIndex, operationIndex) as any,
     control: form.control,
   });
 
