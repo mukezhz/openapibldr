@@ -1023,6 +1023,7 @@ const OperationItem: React.FC<OperationItemParams> = ({
                 });
                 setIsRequestBodyModalOpen(true);
               }}
+              disabled={form.getValues(`paths.${pathIndex}.operations.${operationIndex}.method`).toLowerCase() === 'get'}
             >
               {hasRequestBody ? 'Edit Request' : 'Add Request'}
             </Button>
