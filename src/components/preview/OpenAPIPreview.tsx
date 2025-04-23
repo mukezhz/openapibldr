@@ -5,7 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { OpenAPISchema } from "@/lib/types";
 import { jsonToYaml, prettyPrintJson, downloadFile } from "@/lib/utils/converters";
 import { validateOpenAPISchema } from "@/lib/utils/validator";
-import { Download, FileJson, FileText, CheckCircle2, AlertTriangle, Copy, Maximize, Check, Minimize, Minimize2 } from "lucide-react";
+import { Download, FileJson, FileText, CheckCircle2, AlertTriangle, Copy, Maximize, Check, Minimize2 } from "lucide-react";
 
 interface OpenAPIPreviewProps {
   schema: OpenAPISchema;

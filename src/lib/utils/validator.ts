@@ -69,7 +69,7 @@ export function validateOpenAPISchema(schema: OpenAPISchema): string[] {
       const operations = ['get', 'post', 'put', 'delete', 'patch', 'options', 'head', 'trace'];
       operations.forEach(method => {
         const operation = pathItem[method as keyof typeof pathItem];
-        if (operation && typeof operation === 'object') {
+        if (operation && typeof operation === 'object' && 'responses' in operation) {
           // Check that responses is present and is an object
           if (!operation.responses || typeof operation.responses !== 'object') {
             issues.push(`Missing required field: paths["${path}"].${method}.responses`);

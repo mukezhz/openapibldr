@@ -135,13 +135,13 @@ const ComponentsForm: React.FC<ComponentsFormProps> = ({ initialValues, onUpdate
     });
 
     if (yamlPluginReady) {
-      configureModelWithSchema(editor, monacoInstance, "schema");
+      configureModelWithSchema(editor, monacoInstance);
     }
   }
 
   useEffect(() => {
     if (editorRef.current && monaco && yamlPluginReady) {
-      configureModelWithSchema(editorRef.current, monaco, "schema");
+      configureModelWithSchema(editorRef.current, monaco);
     }
   }, [monaco, yamlPluginReady]);
 
@@ -418,7 +418,7 @@ const ComponentsForm: React.FC<ComponentsFormProps> = ({ initialValues, onUpdate
                 <FormField
                   control={form.control}
                   name="yamlContent"
-                  render={({ field }) => (
+                  render={() => (
                     <FormItem>
                       <FormLabel>YAML Content *</FormLabel>
                       <FormControl>

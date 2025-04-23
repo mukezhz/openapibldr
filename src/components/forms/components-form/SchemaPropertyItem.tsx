@@ -135,7 +135,7 @@ export const SchemaPropertyItem: React.FC<SchemaPropertyItemProps> = ({
               else if (type === 'number') formats = numberFormats;
               else if (type === 'integer') formats = integerFormats;
               
-              if (formats.length === 0) return null;
+              if (formats.length === 0) return <></>;
               
               return (
                 <FormItem>
@@ -180,7 +180,7 @@ export const SchemaPropertyItem: React.FC<SchemaPropertyItemProps> = ({
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  {allSchemas.map((schema, i) => {
+                  {allSchemas.map((_, i) => {
                     // Don't allow self-reference
                     if (i === currentSchemaIndex) return null;
                     const schemaName = watch(`schemas.${i}.name`);

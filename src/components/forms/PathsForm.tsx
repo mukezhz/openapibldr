@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { useFieldArray, useForm, Control, UseFormReturn, FieldArrayWithId } from "react-hook-form";
+import { useFieldArray, useForm, UseFormReturn, FieldArrayWithId } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { PathsObject, PathItemObject, OperationObject, RequestBodyObject, ComponentsObject } from "@/lib/types";
@@ -77,7 +77,6 @@ type PathsFormValues = z.infer<typeof pathSchema>;
 
 type PathItem = PathsFormValues['paths'][number];
 type OperationItem = PathItem['operations'][number];
-type ResponseItem = OperationItem['responses'][number];
 
 type NestedFieldArrays = {
   paths: 'paths',
@@ -476,20 +475,6 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
     }
   }, [selectedOperationForRequestBody, form, handleSubmit]);
 
-  const createSchemaBasedRequestBody = useCallback((schemaRef: string, contentType: string = 'application/json') => {
-    return {
-      description: `Request body using ${schemaRef.split('/').pop()}`,
-      content: {
-        [contentType]: {
-          schema: {
-            $ref: schemaRef
-          }
-        }
-      },
-      required: true
-    };
-  }, []);
-
   const handleUpdateResponse = useCallback((response: any) => {
     if (selectedOperationForResponse) {
       const { pathIndex, operationIndex } = selectedOperationForResponse;
@@ -843,7 +828,6 @@ const PathItem = ({
                 });
 
                 // Auto-expand the new operation
-                const newOperationKey = `${pathIndex}-${operationFields.length}`;
                 toggleOperationExpansion(pathIndex, operationFields.length);
 
                 // Trigger form submission
@@ -874,7 +858,7 @@ type OperationItemParams = {
   setIsRequestBodyModalOpen: (value: boolean) => void;
   requestBodies: Record<string, RequestBodyObject>;
   handleSubmit: (values: PathsFormValues) => void;
-  operationFields: FieldArrayWithId<PathsFormValues, `paths.${number}.operations`, "id">[];
+  operationFields: any[]; // Change the strict typing to any[] to avoid the type mismatch
   components?: ComponentsObject; // Add components as a prop
   // Add new props for response modal
   setSelectedOperationForResponse: (value: { pathIndex: number; operationIndex: number } | null) => void;
@@ -905,13 +889,13 @@ const OperationItem: React.FC<OperationItemParams> = ({
   const currentPath = form.watch(`paths.${pathIndex}.path`);
 
   // Create a field array for responses within this specific operation
-  const { fields: responseFields, append: appendResponse, remove: removeResponse } = useFieldArray({
+  const { fields: responseFields, remove: removeResponse } = useFieldArray({
     name: fieldArrayPaths.responses(pathIndex, operationIndex) as any,
     control: form.control,
   });
 
   // Create a field array for request body content types
-  const { fields: requestContentFields, append: appendRequestContent, remove: removeRequestContent } = useFieldArray({
+  const { fields: requestContentFields, remove: removeRequestContent } = useFieldArray({
     name: fieldArrayPaths.requestContent(pathIndex, operationIndex) as any,
     control: form.control,
   });

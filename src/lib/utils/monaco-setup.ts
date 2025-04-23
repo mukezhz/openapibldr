@@ -34,8 +34,7 @@ export async function setupMonacoYaml() {
 // Configure Monaco model with schema
 export function configureModelWithSchema(
   editor: monaco.editor.IStandaloneCodeEditor, 
-  monacoInstance: any, 
-  componentType: string
+  monacoInstance: any
 ) {
   try {
     const model = editor.getModel();
