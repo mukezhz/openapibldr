@@ -102,7 +102,7 @@ function App() {
 
   return (
     <>
-      <div className="flex max-h-[100vh]">
+      <div className="flex min-h-screen max-h-screen">
         {/* Left Column - Sidebar Navigation */}
         <div className="w-64 border-r bg-muted/10 flex flex-col">
           <div className="p-4 border-b">
