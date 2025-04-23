@@ -20,36 +20,6 @@ export async function setupMonacoYaml() {
           uri: 'openapi-schema-schema.json',
           fileMatch: ['*-schema.yaml', '**/schemas/*.yaml'],
           schema: openAPISchemas.schema
-        },
-        // Schema for Response Objects
-        {
-          uri: 'openapi-response-schema.json',
-          fileMatch: ['*-response.yaml', '**/responses/*.yaml'],
-          schema: openAPISchemas.response
-        },
-        // Schema for Parameter Objects
-        {
-          uri: 'openapi-parameter-schema.json',
-          fileMatch: ['*-parameter.yaml', '**/parameters/*.yaml'],
-          schema: openAPISchemas.parameter
-        },
-        // Schema for RequestBody Objects
-        {
-          uri: 'openapi-requestBody-schema.json',
-          fileMatch: ['*-requestBody.yaml', '**/requestBodies/*.yaml'],
-          schema: openAPISchemas.requestBody
-        },
-        // Schema for Example Objects
-        {
-          uri: 'openapi-example-schema.json',
-          fileMatch: ['*-example.yaml', '**/examples/*.yaml'],
-          schema: openAPISchemas.example
-        },
-        // Schema for SecurityScheme Objects
-        {
-          uri: 'openapi-securityScheme-schema.json',
-          fileMatch: ['*-securityScheme.yaml', '**/securitySchemes/*.yaml'],
-          schema: openAPISchemas.securityScheme
         }
       ]
     });
@@ -61,20 +31,7 @@ export async function setupMonacoYaml() {
   }
 }
 
-// Helper function to get the right schema for a component type
-export function getSchemaForComponentType(componentType: string) {
-  switch (componentType) {
-    case 'schema': return openAPISchemas.schema;
-    case 'response': return openAPISchemas.response;
-    case 'parameter': return openAPISchemas.parameter;
-    case 'requestBody': return openAPISchemas.requestBody;
-    case 'example': return openAPISchemas.example;
-    case 'securityScheme': return openAPISchemas.securityScheme;
-    default: return null;
-  }
-}
-
-// Configure Monaco model with a specific schema
+// Configure Monaco model with schema
 export function configureModelWithSchema(
   editor: monaco.editor.IStandaloneCodeEditor, 
   monacoInstance: any, 
@@ -85,7 +42,7 @@ export function configureModelWithSchema(
     if (!model) return;
 
     // Create a virtual path that will match our schema configurations
-    const virtualUri = monacoInstance.Uri.parse(`file:///temp-${componentType}.yaml`);
+    const virtualUri = monacoInstance.Uri.parse(`file:///temp-schema.yaml`);
     
     // Create a new model with our virtual URI to trigger schema matching
     const newModel = monacoInstance.editor.createModel(

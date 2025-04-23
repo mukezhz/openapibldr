@@ -81,13 +81,13 @@ const OpenAPIPreview: React.FC<OpenAPIPreviewProps> = ({ schema }) => {
           </TabsList>
           
           <TabsContent value="yaml">
-            <pre className="p-4 bg-muted rounded-md overflow-auto max-h-[500px] text-sm">
+            <pre className="p-4 bg-muted rounded-md overflow-auto max-h-[800px] text-sm">
               {yamlContent}
             </pre>
           </TabsContent>
           
           <TabsContent value="json">
-            <pre className="p-4 bg-muted rounded-md overflow-auto max-h-[500px] text-sm">
+            <pre className="p-4 bg-muted rounded-md overflow-auto max-h-[800px] text-sm">
               {jsonContent}
             </pre>
           </TabsContent>

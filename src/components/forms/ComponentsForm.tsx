@@ -28,7 +28,6 @@ import openAPISchemas from './openapi-schemas';
 import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -126,11 +125,6 @@ required:
   - name`,
 };
 
-// OpenAPI JSON schemas for validation and type hints in Monaco editor
-const openAPIComponentSchemas = {
-  schema: openAPISchemas.schema,
-};
-
 // List of available example templates for schemas
 const schemaExampleTemplates = [
   { value: "schema", label: "Default Schema" },
@@ -146,35 +140,6 @@ interface ComponentsFormProps {
 const ComponentsForm: React.FC<ComponentsFormProps> = ({ initialValues, onUpdate }) => {
   const monaco = useMonaco();
   const [yamlPluginReady, setYamlPluginReady] = useState(false);
-  const [components, setComponents] = useState<Component[]>(() => {
-    // Convert initial values to components array
-    const result: Component[] = [];
-    
-    // Extract schemas
-    if (initialValues.schemas) {
-      Object.entries(initialValues.schemas).forEach(([name, schema]) => {
-        result.push({
-          name,
-          type: "schema",
-          componentGroup: "Common",
-          yamlContent: yaml.dump(schema)
-        });
-      });
-    }
-    
-    // Load components from localStorage if available
-    const savedComponents = loadComponentsFromLocalStorage();
-    if (savedComponents.length > 0) {
-      return savedComponents;
-    }
-    
-    return result.length > 0 ? result : [];
-  });
-  
-  const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const [searchQuery, setSearchQuery] = useState<string>("");
-  const [validationError, setValidationError] = useState<string | null>(null);
-  const [expandedComponents, setExpandedComponents] = useState<Record<number, boolean>>({});
   const [yamlContent, setYamlContent] = useState<string>(sampleTemplates.schema);
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const [currentSchemaUri, setCurrentSchemaUri] = useState<string | null>(null);
@@ -217,24 +182,60 @@ const ComponentsForm: React.FC<ComponentsFormProps> = ({ initialValues, onUpdate
 
     // Configure model with the appropriate schema
     if (yamlPluginReady) {
-      const currentType = form.watch("type");
-      configureModelWithSchema(editor, monacoInstance, currentType);
+      configureModelWithSchema(editor, monacoInstance, "schema");
     }
   }
 
   // Update editor model when component type changes
   useEffect(() => {
     if (editorRef.current && monaco && yamlPluginReady) {
-      const currentType = form.watch("type");
-      configureModelWithSchema(editorRef.current, monaco, currentType);
+      configureModelWithSchema(editorRef.current, monaco, "schema");
     }
-  }, [form.watch("type"), monaco, yamlPluginReady]);
+  }, [monaco, yamlPluginReady]);
 
   // Update YAML content
   function handleEditorChange(value: string = "") {
     setYamlContent(value);
     form.setValue("yamlContent", value);
   }
+
+  const [components, setComponents] = useState<Component[]>(() => {
+    // Convert initial values to components array
+    const result: Component[] = [];
+    
+    // Extract schemas
+    if (initialValues.schemas) {
+      Object.entries(initialValues.schemas).forEach(([name, schema]) => {
+        result.push({
+          name,
+          type: "schema",
+          componentGroup: "Common",
+          yamlContent: yaml.dump(schema)
+        });
+      });
+    }
+    
+    // Load components from localStorage if available
+    const savedComponents = loadComponentsFromLocalStorage();
+    if (savedComponents.length > 0) {
+      return savedComponents;
+    }
+    
+    return result.length > 0 ? result : [];
+  });
+  
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [expandedComponents, setExpandedComponents] = useState<Record<number, boolean>>({});
+  
+  // Toggle component expansion
+  const toggleComponentExpansion = (index: number) => {
+    setExpandedComponents(prev => ({
+      ...prev,
+      [index]: !prev[index]
+    }));
+  };
 
   const updateComponents = (newComponents: Component[]) => {
     setComponents(newComponents);
@@ -247,12 +248,9 @@ const ComponentsForm: React.FC<ComponentsFormProps> = ({ initialValues, onUpdate
       try {
         const parsedContent = yaml.load(component.yamlContent) as SchemaObject;
         
-        switch (component.type) {
-          case "schema":
-            if (!componentsObject.schemas) componentsObject.schemas = {};
-            componentsObject.schemas[component.name] = parsedContent;
-            break;
-        }
+        // Only handle schema type components
+        if (!componentsObject.schemas) componentsObject.schemas = {};
+        componentsObject.schemas[component.name] = parsedContent;
       } catch (error) {
         console.error(`Error parsing YAML for ${component.name}:`, error);
       }
@@ -341,114 +339,57 @@ const ComponentsForm: React.FC<ComponentsFormProps> = ({ initialValues, onUpdate
     setYamlContent(sampleTemplates[template]);
   };
   
-  const toggleComponentExpansion = (index: number) => {
-    setExpandedComponents(prev => ({
-      ...prev,
-      [index]: !prev[index],
-    }));
-  };
-  
   // Filter components based on search query
-  const filteredComponents = components.filter(c => 
-    c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    c.componentGroup.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  // Group components by tag
-  const groupedComponents = filteredComponents.reduce((acc, component) => {
-    if (!acc[component.componentGroup]) {
-      acc[component.componentGroup] = [];
+  const filteredComponents = components.filter(component => {
+    if (!searchQuery) return true;
+    
+    const lowerCaseQuery = searchQuery.toLowerCase();
+    return (
+      component.name.toLowerCase().includes(lowerCaseQuery) ||
+      component.componentGroup.toLowerCase().includes(lowerCaseQuery)
+    );
+  });
+  
+  // Group components by their componentGroup
+  const groupedComponents: Record<string, Component[]> = {};
+  
+  filteredComponents.forEach(component => {
+    const group = component.componentGroup;
+    if (!groupedComponents[group]) {
+      groupedComponents[group] = [];
     }
-    acc[component.componentGroup].push(component);
-    return acc;
-  }, {} as Record<string, Component[]>);
+    groupedComponents[group].push(component);
+  });
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Components</CardTitle>
+        <CardTitle>API Components</CardTitle>
       </CardHeader>
-      <CardContent>
-        <div className="space-y-6">
-          {/* Component Editor */}
-          <Card>
-            <CardHeader>
-              <CardTitle>{editingIndex !== null ? "Edit Component" : "Create New Component"}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
-                  <div className="flex gap-4">
-                    <FormField
-                      control={form.control}
-                      name="name"
-                      render={({ field }) => (
-                        <FormItem className="flex-1">
-                          <FormLabel>Component Name *</FormLabel>
-                          <FormControl>
-                            <Input 
-                              placeholder="e.g., UserSchema, ErrorResponse" 
-                              {...field} 
-                            />
-                          </FormControl>
-                          <FormDescription>
-                            A unique name for this component
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    
-                    <FormField
-                      control={form.control}
-                      name="componentGroup"
-                      render={({ field }) => (
-                        <FormItem className="flex-1">
-                          <FormLabel>Component Group *</FormLabel>
-                          <FormControl>
-                            <Input 
-                              placeholder="e.g., User, Authentication" 
-                              {...field} 
-                            />
-                          </FormControl>
-                          <FormDescription>
-                            A group to categorize this component
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-
+      <CardContent className="space-y-8">
+        {/* Form for adding or editing components */}
+        <Card>
+          <CardHeader>
+            <CardTitle>{editingIndex !== null ? "Edit Component" : "Add New Component"}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+                <div className="flex gap-4">
                   <FormField
                     control={form.control}
-                    name="yamlContent"
+                    name="name"
                     render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Example Template</FormLabel>
+                      <FormItem className="flex-1">
+                        <FormLabel>Component Name *</FormLabel>
                         <FormControl>
-                          <Select 
-                            defaultValue="schema"
-                            onValueChange={(value) => {
-                              handleExampleTemplateChange(value);
-                            }}
-                          >
-                            <SelectTrigger className="w-full">
-                              <SelectValue placeholder="Select a template" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectGroup>
-                                {schemaExampleTemplates.map(template => (
-                                  <SelectItem key={template.value} value={template.value}>
-                                    {template.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectGroup>
-                            </SelectContent>
-                          </Select>
+                          <Input 
+                            placeholder="e.g., UserSchema, ErrorResponse" 
+                            {...field} 
+                          />
                         </FormControl>
                         <FormDescription>
-                          Select an example template for the schema
+                          A unique name for this component
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
@@ -457,19 +398,177 @@ const ComponentsForm: React.FC<ComponentsFormProps> = ({ initialValues, onUpdate
                   
                   <FormField
                     control={form.control}
-                    name="yamlContent"
+                    name="componentGroup"
                     render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>YAML Content *</FormLabel>
+                      <FormItem className="flex-1">
+                        <FormLabel>Component Group *</FormLabel>
                         <FormControl>
-                          <div className="border rounded-md" style={{ height: "400px" }}>
+                          <Input 
+                            placeholder="e.g., User, Authentication" 
+                            {...field} 
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          A group to categorize this component
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                
+                <div>
+                  <label className="text-sm font-medium mb-1 block">Example Templates</label>
+                  <div className="flex gap-2 flex-wrap">
+                    {schemaExampleTemplates.map(template => (
+                      <Button
+                        key={template.value}
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleExampleTemplateChange(template.value)}
+                      >
+                        {template.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
+                <FormField
+                  control={form.control}
+                  name="yamlContent"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>YAML Content *</FormLabel>
+                      <FormControl>
+                        <div className="border rounded-md" style={{ height: "400px" }}>
+                          <Editor
+                            height="100%"
+                            defaultLanguage="yaml"
+                            value={yamlContent}
+                            onChange={handleEditorChange}
+                            theme="vs-dark"
+                            options={{
+                              minimap: { enabled: false },
+                              lineNumbers: "on",
+                              scrollBeyondLastLine: false,
+                              automaticLayout: true,
+                              tabSize: 2,
+                              wordWrap: "on",
+                            }}
+                            onMount={handleEditorDidMount}
+                          />
+                        </div>
+                      </FormControl>
+                      <FormDescription>
+                        Define your component using YAML syntax with auto-completion and validation
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                {validationError && (
+                  <div className="bg-destructive/10 text-destructive p-3 rounded-md flex items-start">
+                    <AlertCircle className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
+                    <p className="text-sm">{validationError}</p>
+                  </div>
+                )}
+                
+                <div className="flex gap-2">
+                  <Button type="submit">
+                    {editingIndex !== null ? "Update Component" : "Add Component"}
+                  </Button>
+                  {editingIndex !== null && (
+                    <Button type="button" variant="outline" onClick={handleCancel}>
+                      Cancel
+                    </Button>
+                  )}
+                </div>
+              </form>
+            </Form>
+          </CardContent>
+        </Card>
+        
+        {/* Component List */}
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold">Saved Components</h3>
+          
+          <Input 
+            placeholder="Search components by name or group..." 
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="mb-4"
+          />
+          
+          {Object.keys(groupedComponents).length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              No components created yet. Use the form above to create some.
+            </div>
+          ) : (
+            Object.keys(groupedComponents).map(group => (
+              <div key={group} className="space-y-2">
+                <h4 className="text-md font-semibold">{group}</h4>
+                
+                {groupedComponents[group].map((component, index) => {
+                  const actualIndex = components.findIndex(
+                    c => c.name === component.name && c.type === component.type
+                  );
+                  
+                  return (
+                    <div key={`${component.type}-${component.name}-${index}`} className="border rounded-md">
+                      <div 
+                        className="flex items-center justify-between p-3 cursor-pointer"
+                        onClick={() => toggleComponentExpansion(actualIndex)}
+                      >
+                        <div className="flex items-center">
+                          {expandedComponents[actualIndex] ? 
+                            <ChevronUp className="h-5 w-5 mr-2" /> : 
+                            <ChevronDown className="h-5 w-5 mr-2" />
+                          }
+                          <div>
+                            <span className="font-medium">{component.name}</span>
+                            <span className="ml-2 text-xs bg-muted px-2 py-1 rounded-full">
+                              {component.componentGroup}
+                            </span>
+                          </div>
+                        </div>
+                        
+                        <div className="flex gap-2">
+                          <Button 
+                            type="button" 
+                            size="sm" 
+                            variant="outline"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEdit(actualIndex);
+                            }}
+                          >
+                            Edit
+                          </Button>
+                          <Button 
+                            type="button" 
+                            size="sm" 
+                            variant="destructive"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(actualIndex);
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                      
+                      {expandedComponents[actualIndex] && (
+                        <div className="border-t p-3">
+                          <div className="bg-muted rounded-md overflow-hidden" style={{ height: "200px" }}>
                             <Editor
                               height="100%"
                               defaultLanguage="yaml"
-                              value={yamlContent}
-                              onChange={handleEditorChange}
-                              theme="vs-dark"
+                              value={component.yamlContent}
                               options={{
+                                readOnly: true,
                                 minimap: { enabled: false },
                                 lineNumbers: "on",
                                 scrollBeyondLastLine: false,
@@ -477,148 +576,24 @@ const ComponentsForm: React.FC<ComponentsFormProps> = ({ initialValues, onUpdate
                                 tabSize: 2,
                                 wordWrap: "on",
                               }}
-                              onMount={handleEditorDidMount}
+                              theme="vs-dark"
                             />
                           </div>
-                        </FormControl>
-                        <FormDescription>
-                          Define your component using YAML syntax with auto-completion and validation
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  {validationError && (
-                    <div className="bg-destructive/10 text-destructive p-3 rounded-md flex items-start">
-                      <AlertCircle className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
-                      <p className="text-sm">{validationError}</p>
-                    </div>
-                  )}
-                  
-                  <div className="flex gap-2">
-                    <Button type="submit">
-                      {editingIndex !== null ? "Update Component" : "Add Component"}
-                    </Button>
-                    {editingIndex !== null && (
-                      <Button type="button" variant="outline" onClick={handleCancel}>
-                        Cancel
-                      </Button>
-                    )}
-                  </div>
-                </form>
-              </Form>
-            </CardContent>
-          </Card>
-          
-          {/* Component List */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold">Saved Components</h3>
-            
-            <Input 
-              placeholder="Search components by name or group..." 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="mb-4"
-            />
-            
-            {Object.keys(groupedComponents).length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                No components created yet. Use the form above to create some.
-              </div>
-            ) : (
-              Object.keys(groupedComponents).map(group => (
-                <div key={group} className="space-y-2">
-                  <h4 className="text-md font-semibold">{group}</h4>
-                  
-                  {groupedComponents[group].map((component, index) => {
-                    const actualIndex = components.findIndex(
-                      c => c.name === component.name && c.type === component.type
-                    );
-                    
-                    return (
-                      <div key={`${component.type}-${component.name}-${index}`} className="border rounded-md">
-                        <div 
-                          className="flex items-center justify-between p-3 cursor-pointer"
-                          onClick={() => toggleComponentExpansion(actualIndex)}
-                        >
-                          <div className="flex items-center">
-                            {expandedComponents[actualIndex] ? 
-                              <ChevronUp className="h-5 w-5 mr-2" /> : 
-                              <ChevronDown className="h-5 w-5 mr-2" />
-                            }
-                            <div>
-                              <span className="font-medium">{component.name}</span>
-                              <span className="ml-2 text-xs bg-muted px-2 py-1 rounded-full">
-                                {component.type}
-                              </span>
-                              <span className="ml-2 text-xs bg-muted px-2 py-1 rounded-full">
-                                {component.componentGroup}
-                              </span>
-                            </div>
-                          </div>
                           
-                          <div className="flex gap-2">
-                            <Button 
-                              type="button" 
-                              size="sm" 
-                              variant="outline"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleEdit(actualIndex);
-                              }}
-                            >
-                              Edit
-                            </Button>
-                            <Button 
-                              type="button" 
-                              size="sm" 
-                              variant="destructive"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDelete(actualIndex);
-                              }}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                          <div className="mt-2 text-sm text-muted-foreground">
+                            <p>Reference this component in your paths using:</p>
+                            <code className="bg-muted p-1 rounded text-xs">
+                              {`$ref: '#/components/schemas/${component.name}'`}
+                            </code>
                           </div>
                         </div>
-                        
-                        {expandedComponents[actualIndex] && (
-                          <div className="border-t p-3">
-                            <div className="bg-muted rounded-md overflow-hidden" style={{ height: "200px" }}>
-                              <Editor
-                                height="100%"
-                                defaultLanguage="yaml"
-                                value={component.yamlContent}
-                                options={{
-                                  readOnly: true,
-                                  minimap: { enabled: false },
-                                  lineNumbers: "on",
-                                  scrollBeyondLastLine: false,
-                                  automaticLayout: true,
-                                  tabSize: 2,
-                                  wordWrap: "on",
-                                }}
-                                theme="vs-dark"
-                              />
-                            </div>
-                            
-                            <div className="mt-2 text-sm text-muted-foreground">
-                              <p>Reference this component in your paths using:</p>
-                              <code className="bg-muted p-1 rounded text-xs">
-                                {`$ref: '#/components/schemas/${component.name}'`}
-                              </code>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              ))
-            )}
-          </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ))
+          )}
         </div>
       </CardContent>
     </Card>

@@ -27,7 +27,6 @@ function App() {
   }
 
   const updatePaths = (paths: OpenAPISchema['paths']) => {
-    console.log("Updating paths:", paths)
     setSchema(prev => ({ ...prev, paths }))
   }
 
@@ -104,7 +103,7 @@ function App() {
         {/* Left Column - Sidebar Navigation */}
         <div className="w-64 border-r bg-muted/10 flex flex-col">
           <div className="p-4 border-b">
-            <h1 className="text-2xl font-bold">APIBldr</h1>
+            <h1 className="text-2xl font-bold">OpenApiBldr</h1>
             <p className="text-sm text-muted-foreground">OpenAPI 3.1 Builder</p>
           </div>
 
