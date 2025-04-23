@@ -15,7 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -206,7 +206,7 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
                 contentType,
                 schemaRef: mediaType.schema && '$ref' in mediaType.schema ? mediaType.schema.$ref : '',
               }));
-              
+
               requestBody = {
                 description: reqBody.description || '',
                 required: reqBody.required || false,
@@ -271,9 +271,9 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
     values.paths.forEach(path => {
       // Ensure path exists and starts with a forward slash
       if (!path || !path.path) return; // Skip this path if undefined
-      
+
       const pathValue = path.path.startsWith('/') ? path.path : `/${path.path}`;
-      
+
       const pathItemObject: PathItemObject = {
         summary: path.summary || undefined,
         description: path.description || undefined,
@@ -283,7 +283,7 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
       path.operations.forEach(operation => {
         // Skip undefined operations
         if (!operation) return;
-        
+
         const operationObject: OperationObject = {
           summary: operation.summary || undefined,
           description: operation.description || undefined,
@@ -296,7 +296,7 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
         operation.responses.forEach(response => {
           // Skip undefined responses
           if (!response) return;
-          
+
           // Handle schema reference in response
           if (response.schemaRef && response.schemaRef !== "none") {
             operationObject.responses[response.statusCode] = {
@@ -419,11 +419,11 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
       const { pathIndex, operationIndex } = selectedOperationForRequestBody;
       let path = form.getValues(`paths.${pathIndex}.path`) || '';
       const method = form.getValues(`paths.${pathIndex}.operations.${operationIndex}.method`) || 'get';
-      
+
       // Ensure path starts with a forward slash for consistent keys
       path = path.startsWith('/') ? path : `/${path}`;
       const key = `${path}-${method}`;
-      
+
       // Update the request bodies state
       setRequestBodies(prev => ({
         ...prev,
@@ -451,7 +451,7 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
           content: contentArray
         });
       }
-      
+
       // Close the request body editor modal
       setIsRequestBodyModalOpen(false);
       setSelectedOperationForRequestBody(null);
@@ -481,7 +481,7 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
   const handleUpdateResponse = useCallback((response: any) => {
     if (selectedOperationForResponse) {
       const { pathIndex, operationIndex } = selectedOperationForResponse;
-      
+
       if (responseToEdit) {
         // Update existing response
         const responseIndex = responseToEdit.index;
@@ -493,7 +493,7 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
       } else {
         // Add new response directly to the form values
         const currentResponses = form.getValues(`paths.${pathIndex}.operations.${operationIndex}.responses`) || [];
-        
+
         // Append the new response
         form.setValue(`paths.${pathIndex}.operations.${operationIndex}.responses`, [
           ...currentResponses,
@@ -546,7 +546,10 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
   return (
     <>
       <Card>
-        <CardContent className="pt-6">
+        <CardHeader>
+          <CardTitle>API Paths</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-8">
           <Form {...form}>
             <form className="space-y-6">
               {pathFields.map((pathField, pathIndex) => (
@@ -585,8 +588,8 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
       </Card>
 
       {/* Request Body Modal */}
-      <Dialog 
-        open={isRequestBodyModalOpen} 
+      <Dialog
+        open={isRequestBodyModalOpen}
         onOpenChange={(open) => {
           setIsRequestBodyModalOpen(open);
           if (!open) {
@@ -605,7 +608,7 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
                   Define the request body for this operation
                 </DialogDescription>
               </DialogHeader>
-              
+
               <RequestBodyForm
                 initialValue={(() => {
                   if (selectedOperationForRequestBody) {
@@ -626,8 +629,8 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
       </Dialog>
 
       {/* Response Modal */}
-      <Dialog 
-        open={isResponseModalOpen} 
+      <Dialog
+        open={isResponseModalOpen}
         onOpenChange={(open) => {
           setIsResponseModalOpen(open);
           if (!open) {
@@ -647,7 +650,7 @@ const PathsForm: React.FC<PathsFormProps> = ({ initialValues, onUpdate, componen
                   Define the response for this operation
                 </DialogDescription>
               </DialogHeader>
-              
+
               <ResponseForm
                 initialValue={responseToEdit?.data || undefined}
                 onUpdate={handleUpdateResponse}
@@ -916,7 +919,7 @@ const OperationItem: React.FC<OperationItemParams> = ({
   const hasRequestBody = !!requestBodies[requestBodyKey];
 
   const getMethodBadgeColor = (method: string) => {
-    switch(method.toLowerCase()) {
+    switch (method.toLowerCase()) {
       case 'get': return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
       case 'post': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
       case 'put': return 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200';
@@ -1075,8 +1078,8 @@ const OperationItem: React.FC<OperationItemParams> = ({
               <FormItem>
                 <FormLabel>Tags</FormLabel>
                 <FormControl>
-                  <Input 
-                    placeholder="Comma separated tags (e.g. Users, Admin)" 
+                  <Input
+                    placeholder="Comma separated tags (e.g. Users, Admin)"
                     value={field.value ? field.value.join(', ') : ''}
                     onChange={(e) => {
                       const tagsString = e.target.value;
@@ -1127,7 +1130,7 @@ const OperationItem: React.FC<OperationItemParams> = ({
                       <FormItem className="flex-1">
                         <FormLabel className="text-xs">Schema Reference</FormLabel>
                         <Select
-                          onValueChange={field.onChange} 
+                          onValueChange={field.onChange}
                           value={field.value || ""}
                         >
                           <FormControl>
@@ -1168,7 +1171,7 @@ const OperationItem: React.FC<OperationItemParams> = ({
                   </Button>
                 </div>
               ))}
-              
+
               {requestContentFields.length > 0 && (
                 <div className="flex gap-2 p-2 border rounded-md bg-muted/5">
                   <FormField
@@ -1184,7 +1187,7 @@ const OperationItem: React.FC<OperationItemParams> = ({
                       </FormItem>
                     )}
                   />
-                  
+
                   <FormField
                     control={form.control}
                     name={`paths.${pathIndex}.operations.${operationIndex}.requestBody.required`}
@@ -1280,7 +1283,7 @@ const OperationItem: React.FC<OperationItemParams> = ({
                       <FormItem className="flex-1">
                         <FormLabel className="text-xs">Response Schema</FormLabel>
                         <Select
-                          onValueChange={field.onChange} 
+                          onValueChange={field.onChange}
                           value={field.value || ""}
                         >
                           <FormControl>
@@ -1339,7 +1342,7 @@ const OperationItem: React.FC<OperationItemParams> = ({
                         setIsResponseModalOpen(true);
                       }}
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-pencil"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-pencil"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /><path d="m15 5 4 4" /></svg>
                     </Button>
 
                     {responseFields.length > 1 && (
