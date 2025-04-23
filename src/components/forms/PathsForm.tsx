@@ -1135,7 +1135,7 @@ const OperationItem: React.FC<OperationItemParams> = ({
                         <FormLabel className="text-xs">Schema Reference</FormLabel>
                         <Select
                           onValueChange={field.onChange}
-                          value={field.value || ""}
+                          value={field.value || "none"}
                         >
                           <FormControl>
                             <SelectTrigger>
@@ -1143,7 +1143,7 @@ const OperationItem: React.FC<OperationItemParams> = ({
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="">None</SelectItem>
+                            <SelectItem value="none">None</SelectItem>
                             {/* Reference schemas from components */}
                             {Object.entries(components?.schemas || {}).map(([name]) => (
                               <SelectItem key={name} value={`#/components/schemas/${name}`}>
@@ -1288,7 +1288,7 @@ const OperationItem: React.FC<OperationItemParams> = ({
                         <FormLabel className="text-xs">Response Schema</FormLabel>
                         <Select
                           onValueChange={field.onChange}
-                          value={field.value || ""}
+                          value={field.value || "none"}
                         >
                           <FormControl>
                             <SelectTrigger>
