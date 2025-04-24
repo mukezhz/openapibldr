@@ -2,13 +2,18 @@
 
 A modern OpenAPI 3.1.x specification builder with a user-friendly form interface built with React 19, TypeScript, and shadcn/ui.
 
+![OpenAPIBldr Screenshot](https://via.placeholder.com/800x450.png?text=OpenAPIBldr+Screenshot)
+
 ## Features
 
-- Generate OpenAPI 3.1.x specifications through easy-to-use forms
-- Real-time preview of the generated OpenAPI specification
-- Export to YAML or JSON format
-- Intuitive interface for managing API information, servers, paths, and more
-- Modern UI built with shadcn/ui components
+- **Form-based API Specification Building**: Create OpenAPI 3.1.x specifications without writing YAML or JSON manually
+- **Real-time Preview**: See your API specification updated in real-time as you make changes
+- **Multiple Export Formats**: Export your specification in both YAML and JSON formats
+- **Local Storage Integration**: Your work is automatically saved to local storage to prevent data loss
+- **Import Existing Specifications**: Import and edit existing OpenAPI specifications
+- **Validation**: Immediate feedback on specification validity with detailed error reporting
+- **Component Reuse**: Create reusable schemas and reference them throughout your API definition
+- **Modern UI**: Sleek, responsive interface built with shadcn/ui and Tailwind CSS
 
 ## Getting Started
 
@@ -52,37 +57,105 @@ The built assets will be available in the `dist` directory.
 
 ## Usage
 
-OpenAPIBldr provides a tabbed interface for creating different sections of your OpenAPI specification:
+OpenAPIBldr provides an intuitive interface for creating different sections of your OpenAPI specification:
 
-1. **API Info**: Define basic information about your API including title, description, version, contact information, and license.
+### 1. API Info
+Define basic information about your API:
+- Title and description
+- Version information
+- Contact details
+- License information
+- Terms of service
 
-2. **Servers**: Configure server URLs where your API is hosted.
+### 2. Servers
+Configure server URLs where your API is hosted:
+- Multiple server environments (production, staging, development)
+- Server descriptions
+- Variable templating for dynamic server URLs
 
-3. **Paths**: Define API endpoints, HTTP methods, request parameters, and responses.
+### 3. Paths
+Define API endpoints and operations:
+- HTTP methods (GET, POST, PUT, DELETE, etc.)
+- Path parameters
+- Operation summaries and descriptions
+- Request body definitions with schema references
+- Response definitions with status codes
+- Tags for grouping operations
 
-4. **Components** (Coming Soon): Create reusable schemas, parameters, responses, and more.
+### 4. Components
+Create reusable schemas and components:
+- Data models/schemas
+- Parameter definitions
+- Response templates
+- Request body templates
+- Support for JSON Schema features
 
-5. **Security** (Coming Soon): Define security requirements for your API.
+### 5. Export Options
+Export your API specification in multiple formats:
+- YAML format
+- JSON format
+- Direct copy to clipboard
+- Downloadable files
 
-The generated OpenAPI specification is displayed in real-time on the right panel, and can be exported in either YAML or JSON format.
+The OpenAPIBldr interface is designed with a three-panel layout:
+- **Left Panel**: Navigation menu for different specification sections
+- **Middle Panel**: Forms for editing the current section
+- **Right Panel**: Live preview of the complete OpenAPI specification in YAML or JSON
 
 ## Technologies Used
 
 - React 19
 - TypeScript
 - Vite
-- shadcn/ui
+- Monaco Editor for YAML editing
+- shadcn/ui components
 - Tailwind CSS
 - Zod for form validation
+- React Hook Form for form state management
 - js-yaml for YAML conversion
+
+## Project Structure
+
+```
+src/
+├── components/
+│   ├── forms/          # Form components for different OpenAPI sections
+│   ├── import/         # Components for importing existing specifications
+│   ├── preview/        # Preview components for viewing the specification
+│   └── ui/             # Reusable UI components (shadcn/ui)
+├── lib/
+│   ├── types.ts        # TypeScript definitions for OpenAPI schema
+│   └── utils/          # Utility functions
+└── App.tsx             # Main application component
+```
 
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
+1. Fork the repository
+2. Create your feature branch: `git checkout -b feature/amazing-feature`
+3. Commit your changes: `git commit -m 'Add some amazing feature'`
+4. Push to the branch: `git push origin feature/amazing-feature`
+5. Open a Pull Request
+
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Acknowledgments
+
+- [OpenAPI Initiative](https://www.openapis.org/) for the OpenAPI Specification
+- [shadcn/ui](https://ui.shadcn.com/) for the beautiful UI components
+- All contributors to the project
+
+## Roadmap
+
+- Enhanced security definitions support
+- OpenAPI specification validation improvements
+- Multi-file component references
+- API documentation generation
+- Integration with API testing tools
 
 ## Expanding the ESLint configuration
 
