@@ -1,7 +1,7 @@
 import { useEffect } from "react";
-import { UseFormReturn } from "react-hook-form";
+import { FieldValues, UseFormReturn } from "react-hook-form";
 
-export function useFormAutoSubmit<T>(
+export function useFormAutoSubmit<T extends FieldValues>(
   form: UseFormReturn<T>,
   handleSubmit: (data: T) => void,
   delay: number = 300

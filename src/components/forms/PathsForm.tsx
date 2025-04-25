@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import {
   useFieldArray,
   useForm,
@@ -34,7 +34,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Trash2, ChevronDown, ChevronUp, Plus } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { httpMethods, commonStatusCodes } from "@/lib/utils/defaults";
 import RequestBodyForm from "./RequestBodyForm";
 import ResponseForm from "./ResponseForm";
@@ -869,7 +869,6 @@ const PathItem = ({
 
   return (
     <ExpandableItem
-      id={`path-${pathIndex}`}
       title={`Path: ${pathTitle}`}
       isExpanded={isExpanded}
       onToggleExpand={() => togglePathExpansion(pathIndex)}
@@ -877,7 +876,6 @@ const PathItem = ({
         pathFields.length > 1
           ? () => {
               removePath(pathIndex);
-              // Trigger form submission after removing
               setTimeout(() => {
                 const formData = form.getValues();
                 handleSubmit(formData);
