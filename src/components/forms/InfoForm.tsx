@@ -16,8 +16,11 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-// Import localStorage utilities
-import { loadInfoFromLocalStorage, saveInfoToLocalStorage } from "./shared/localstorage";
+import {
+  loadInfoFromLocalStorage,
+  saveInfoToLocalStorage,
+} from "./shared/localstorage";
+import { useFormAutoSubmit } from "@/hooks/useFormAutoSubmit";
 
 // Validation schema for API info
 const infoSchema = z.object({
@@ -25,15 +28,19 @@ const infoSchema = z.object({
   version: z.string().min(1, { message: "Version is required" }),
   description: z.string().optional(),
   termsOfService: z.string().url().optional().or(z.string().length(0)),
-  contact: z.object({
-    name: z.string().optional(),
-    url: z.string().url().optional().or(z.string().length(0)),
-    email: z.string().email().optional().or(z.string().length(0)),
-  }).optional(),
-  license: z.object({
-    name: z.string().optional(),
-    url: z.string().url().optional().or(z.string().length(0)),
-  }).optional(),
+  contact: z
+    .object({
+      name: z.string().optional(),
+      url: z.string().url().optional().or(z.string().length(0)),
+      email: z.string().email().optional().or(z.string().length(0)),
+    })
+    .optional(),
+  license: z
+    .object({
+      name: z.string().optional(),
+      url: z.string().url().optional().or(z.string().length(0)),
+    })
+    .optional(),
 });
 
 interface InfoFormProps {
@@ -43,14 +50,15 @@ interface InfoFormProps {
 
 const InfoForm: React.FC<InfoFormProps> = ({ initialValues, onUpdate }) => {
   const savedInfo = loadInfoFromLocalStorage();
-  
+
   const form = useForm<z.infer<typeof infoSchema>>({
     resolver: zodResolver(infoSchema),
     defaultValues: {
       title: savedInfo?.title || initialValues.title || "",
       version: savedInfo?.version || initialValues.version || "1.0.0",
       description: savedInfo?.description || initialValues.description || "",
-      termsOfService: savedInfo?.termsOfService || initialValues.termsOfService || "",
+      termsOfService:
+        savedInfo?.termsOfService || initialValues.termsOfService || "",
       contact: {
         name: savedInfo?.contact?.name || initialValues.contact?.name || "",
         url: savedInfo?.contact?.url || initialValues.contact?.url || "",
@@ -80,36 +88,45 @@ const InfoForm: React.FC<InfoFormProps> = ({ initialValues, onUpdate }) => {
     const cleanValues = {
       ...values,
       termsOfService: values.termsOfService || undefined,
-      contact: values.contact ? {
-        name: values.contact.name || undefined,
-        url: values.contact.url || undefined,
-        email: values.contact.email || undefined,
-      } : undefined,
-      license: values.license ? {
-        name: values.license.name || undefined,
-        url: values.license.url || undefined,
-      } : undefined,
+      contact: values.contact
+        ? {
+            name: values.contact.name || undefined,
+            url: values.contact.url || undefined,
+            email: values.contact.email || undefined,
+          }
+        : undefined,
+      license: values.license
+        ? {
+            name: values.license.name || undefined,
+            url: values.license.url || undefined,
+          }
+        : undefined,
     };
-    
+
     // Remove contact or license objects if they have no properties
-    const hasContactValues = cleanValues.contact && 
-      Object.values(cleanValues.contact).some(val => val !== undefined);
-    
-    const hasLicenseValues = cleanValues.license && 
-      Object.values(cleanValues.license).some(val => val !== undefined);
-    
+    const hasContactValues =
+      cleanValues.contact &&
+      Object.values(cleanValues.contact).some((val) => val !== undefined);
+
+    const hasLicenseValues =
+      cleanValues.license &&
+      Object.values(cleanValues.license).some((val) => val !== undefined);
+
     const finalValues = {
       ...cleanValues,
       contact: hasContactValues ? cleanValues.contact : undefined,
       license: hasLicenseValues ? cleanValues.license : undefined,
     };
-    
+
     // Save to localStorage
     saveInfoToLocalStorage(finalValues as InfoObject);
-    
+
     // Update parent component
     onUpdate(finalValues as InfoObject);
   };
+
+  // Use our reusable useFormAutoSubmit hook
+  useFormAutoSubmit(form, handleSubmit, 300);
 
   return (
     <Card>
@@ -118,7 +135,7 @@ const InfoForm: React.FC<InfoFormProps> = ({ initialValues, onUpdate }) => {
       </CardHeader>
       <CardContent>
         <Form {...form}>
-          <form onChange={form.handleSubmit(handleSubmit)} className="space-y-6">
+          <form className="space-y-6">
             <FormField
               control={form.control}
               name="title"
@@ -128,14 +145,12 @@ const InfoForm: React.FC<InfoFormProps> = ({ initialValues, onUpdate }) => {
                   <FormControl>
                     <Input placeholder="API Title" {...field} />
                   </FormControl>
-                  <FormDescription>
-                    The title of your API
-                  </FormDescription>
+                  <FormDescription>The title of your API</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            
+
             <FormField
               control={form.control}
               name="version"
@@ -145,14 +160,12 @@ const InfoForm: React.FC<InfoFormProps> = ({ initialValues, onUpdate }) => {
                   <FormControl>
                     <Input placeholder="1.0.0" {...field} />
                   </FormControl>
-                  <FormDescription>
-                    The version of your API
-                  </FormDescription>
+                  <FormDescription>The version of your API</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            
+
             <FormField
               control={form.control}
               name="description"
@@ -160,10 +173,10 @@ const InfoForm: React.FC<InfoFormProps> = ({ initialValues, onUpdate }) => {
                 <FormItem>
                   <FormLabel>Description</FormLabel>
                   <FormControl>
-                    <Textarea 
+                    <Textarea
                       placeholder="Describe your API"
                       className="min-h-[100px]"
-                      {...field} 
+                      {...field}
                     />
                   </FormControl>
                   <FormDescription>
@@ -173,7 +186,7 @@ const InfoForm: React.FC<InfoFormProps> = ({ initialValues, onUpdate }) => {
                 </FormItem>
               )}
             />
-            
+
             <FormField
               control={form.control}
               name="termsOfService"
@@ -183,9 +196,7 @@ const InfoForm: React.FC<InfoFormProps> = ({ initialValues, onUpdate }) => {
                   <FormControl>
                     <Input placeholder="https://example.com/terms" {...field} />
                   </FormControl>
-                  <FormDescription>
-                    URL to the terms of service
-                  </FormDescription>
+                  <FormDescription>URL to the terms of service</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -193,7 +204,7 @@ const InfoForm: React.FC<InfoFormProps> = ({ initialValues, onUpdate }) => {
 
             <div className="space-y-4">
               <h3 className="text-lg font-medium">Contact Information</h3>
-              
+
               <FormField
                 control={form.control}
                 name="contact.name"
@@ -207,7 +218,7 @@ const InfoForm: React.FC<InfoFormProps> = ({ initialValues, onUpdate }) => {
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={form.control}
                 name="contact.email"
@@ -221,7 +232,7 @@ const InfoForm: React.FC<InfoFormProps> = ({ initialValues, onUpdate }) => {
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={form.control}
                 name="contact.url"
@@ -229,7 +240,10 @@ const InfoForm: React.FC<InfoFormProps> = ({ initialValues, onUpdate }) => {
                   <FormItem>
                     <FormLabel>Contact URL</FormLabel>
                     <FormControl>
-                      <Input placeholder="https://example.com/support" {...field} />
+                      <Input
+                        placeholder="https://example.com/support"
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -239,7 +253,7 @@ const InfoForm: React.FC<InfoFormProps> = ({ initialValues, onUpdate }) => {
 
             <div className="space-y-4">
               <h3 className="text-lg font-medium">License Information</h3>
-              
+
               <FormField
                 control={form.control}
                 name="license.name"
@@ -253,7 +267,7 @@ const InfoForm: React.FC<InfoFormProps> = ({ initialValues, onUpdate }) => {
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={form.control}
                 name="license.url"
@@ -261,7 +275,10 @@ const InfoForm: React.FC<InfoFormProps> = ({ initialValues, onUpdate }) => {
                   <FormItem>
                     <FormLabel>License URL</FormLabel>
                     <FormControl>
-                      <Input placeholder="https://opensource.org/licenses/MIT" {...field} />
+                      <Input
+                        placeholder="https://opensource.org/licenses/MIT"
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
